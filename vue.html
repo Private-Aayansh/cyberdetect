@@ -234,10 +234,10 @@
                                 </div>
                                 
                                 <button v-if="getAnalysisResult(attackType.endpoint)" 
-                                        @click="viewTable(attackType)" 
+                                        @click="viewResult(attackType)" 
                                         class="flex items-center space-x-1 px-3 py-1 text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors">
-                                    <i class="fas fa-table"></i>
-                                    <span>View Table</span>
+                                    <i class="fas fa-eye"></i>
+                                    <span>View Result</span>
                                 </button>
                             </div>
                             
@@ -251,12 +251,159 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- AI Analysis Section -->
+                    <div class="mt-8">
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Custom Analysis</h3>
+                        <div class="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
+                            <div class="flex items-center justify-between mb-6">
+                                <div class="flex items-center space-x-3">
+                                    <div class="p-2 bg-purple-100 dark:bg-purple-900/20 rounded-lg">
+                                        <i class="fas fa-magic text-purple-600 dark:text-purple-400 text-xl"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">AI-Powered Custom Analysis</h3>
+                                        <p class="text-sm text-gray-600 dark:text-gray-300">Describe what you want to analyze and AI will create the detection logic</p>
+                                    </div>
+                                </div>
+                                <button @click="showAiConfig = !showAiConfig" 
+                                        class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                                    <i class="fas fa-cog"></i>
+                                </button>
+                            </div>
+
+                            <!-- AI Configuration Panel -->
+                            <div v-if="showAiConfig" class="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                                <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-3">AI Provider Configuration</h4>
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">AI Provider</label>
+                                        <select v-model="aiProvider" @change="saveAiConfig" 
+                                                class="w-full px-4 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900 dark:text-white">
+                                            <option v-for="provider in llmProviders" :key="provider.id" :value="provider.id">
+                                                {{ provider.name }}
+                                            </option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <div class="flex items-center justify-between mb-2">
+                                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">API Key</label>
+                                            <a v-if="currentProvider?.apiKeyLink" :href="currentProvider.apiKeyLink" target="_blank" rel="noopener noreferrer"
+                                               class="text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 flex items-center space-x-1">
+                                                <span>Get API Key</span>
+                                                <i class="fas fa-external-link-alt text-xs"></i>
+                                            </a>
+                                        </div>
+                                        <input v-model="aiApiKey" @input="saveAiConfig" type="password" 
+                                               class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white" 
+                                               placeholder="Enter your API key..."/>
+                                    </div>
+                                    <div v-if="currentProvider?.customEndpoint">
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">API Endpoint</label>
+                                        <input v-model="customEndpoint" @input="saveAiConfig" type="url" 
+                                               class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white" 
+                                               :placeholder="currentProvider.defaultEndpoint || 'https://api.example.com/v1/chat/completions'"/>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Analysis Input Form -->
+                            <form @submit.prevent="createCustomAnalysis($refs.analysisInput.value)" class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Describe the analysis you want to perform
+                                    </label>
+                                    <textarea ref="analysisInput" 
+                                              class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none" 
+                                              placeholder="e.g., Look for password or secret extraction attacks, Find attempts to access sensitive configuration files..." 
+                                              rows="3"></textarea>
+                                </div>
+                                <button type="submit" :disabled="!aiApiKey || isLoading"
+                                        class="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors">
+                                    <i class="fas fa-plus"></i>
+                                    <span>Create Custom Analysis</span>
+                                </button>
+                            </form>
+
+                            <!-- Example Prompts -->
+                            <div class="mt-6">
+                                <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Example Analysis Ideas:</h4>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                    <button v-for="prompt in ['Look for password or secret extraction attacks', 'Detect attempts to access configuration files', 'Find suspicious file upload attempts', 'Identify potential data exfiltration patterns', 'Detect API abuse or rate limiting violations', 'Find attempts to access backup files']" 
+                                            :key="prompt" @click="$refs.analysisInput.value = prompt"
+                                            class="text-left p-3 text-sm bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-lg transition-colors">
+                                        <div class="flex items-start space-x-2">
+                                            <i class="fas fa-sparkles text-purple-500 mt-0.5 flex-shrink-0"></i>
+                                            <span class="text-gray-700 dark:text-gray-300">{{ prompt }}</span>
+                                        </div>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div v-if="!aiApiKey" class="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                                <div class="flex items-center space-x-2">
+                                    <i class="fas fa-brain text-yellow-600 dark:text-yellow-400"></i>
+                                    <p class="text-sm text-yellow-800 dark:text-yellow-200">
+                                        Please configure your AI provider settings to create custom analyses
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Custom Analysis Results -->
+                    <div v-if="customAnalysisResults.length > 0" class="mt-8">
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Custom Analysis Results</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                            <div v-for="result in customAnalysisResults" :key="result.type" 
+                                 class="attack-card bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="p-2 rounded-lg" :style="{ backgroundColor: result.color + '20' }">
+                                            <i class="fas fa-magic text-xl" :style="{ color: result.color }"></i>
+                                        </div>
+                                        <div>
+                                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{{ result.name }}</h3>
+                                            <span class="text-xs px-2 py-1 rounded-full font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300">
+                                                CUSTOM
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">{{ result.description }}</p>
+                                
+                                <div class="flex items-center justify-between">
+                                    <button @click="currentFunction = result; showFunctionModal = true" 
+                                            class="flex items-center space-x-1 px-3 py-1 text-sm bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors">
+                                        <i class="fas fa-code"></i>
+                                        <span>View Code</span>
+                                    </button>
+                                    
+                                    <button @click="currentResult = result; showResultModal = true" 
+                                            class="flex items-center space-x-1 px-3 py-1 text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors">
+                                        <i class="fas fa-eye"></i>
+                                        <span>View Result</span>
+                                    </button>
+                                </div>
+                                
+                                <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                    <div class="flex items-center justify-between text-sm">
+                                        <span class="text-gray-600 dark:text-gray-300">Threats Found:</span>
+                                        <span :class="['font-semibold', result.threats.length > 0 ? 'text-red-600' : 'text-green-600']">
+                                            {{ result.threats.length }}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <!-- Dashboard View -->
             <div v-if="activeView === 'dashboard'" class="space-y-6">
-                <div v-if="analysisResults.length === 0" class="text-center py-12">
+                <div v-if="analysisResults.length === 0 && customAnalysisResults.length === 0" class="text-center py-12">
                     <i class="fas fa-chart-bar text-6xl text-gray-300 dark:text-gray-600 mb-4"></i>
                     <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">No Analysis Data</h3>
                     <p class="text-gray-600 dark:text-gray-300">Run some scans first to see dashboard visualizations.</p>
@@ -265,7 +412,7 @@
                 <div v-else>
                     <!-- Dashboard content will be implemented here -->
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                        <div v-for="result in analysisResults" :key="result.type" 
+                        <div v-for="result in [...analysisResults, ...customAnalysisResults]" :key="result.type" 
                              class="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
                             <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">{{ result.name }}</h3>
                             <p class="text-3xl font-bold" :style="{ color: result.color }">{{ result.threats.length }}</p>
@@ -277,14 +424,78 @@
 
             <!-- Data Table View -->
             <div v-if="activeView === 'data'" class="space-y-6">
-                <div v-if="analysisResults.length === 0" class="text-center py-12">
+                <div v-if="analysisResults.length === 0 && customAnalysisResults.length === 0" class="text-center py-12">
                     <i class="fas fa-database text-6xl text-gray-300 dark:text-gray-600 mb-4"></i>
                     <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">No Data Available</h3>
                     <p class="text-gray-600 dark:text-gray-300">Run some scans first to see detailed data tables.</p>
                 </div>
                 
                 <div v-else>
-                    <div v-for="result in analysisResults" :key="result.type" class="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
+                    <!-- Filters Section -->
+                    <div class="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg mb-6">
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Filters</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <!-- Search -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Search</label>
+                                <input v-model="dataFilters.searchTerm" type="text" 
+                                       class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white" 
+                                       placeholder="Search URL, IP, User Agent..."/>
+                            </div>
+                            
+                            <!-- Methods -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Methods</label>
+                                <div class="space-y-1 max-h-32 overflow-y-auto">
+                                    <label v-for="method in availableFilters.methods" :key="method" class="flex items-center">
+                                        <input type="checkbox" :checked="dataFilters.selectedMethods.includes(method)" 
+                                               @change="toggleMethodFilter(method)"
+                                               class="custom-checkbox mr-2"/>
+                                        <span :class="['text-xs px-2 py-1 rounded font-medium', getMethodClass(method)]">{{ method }}</span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <!-- Status Codes -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Status Codes</label>
+                                <div class="space-y-1 max-h-32 overflow-y-auto">
+                                    <label v-for="status in availableFilters.statuses" :key="status" class="flex items-center">
+                                        <input type="checkbox" :checked="dataFilters.selectedStatuses.includes(status)" 
+                                               @change="toggleStatusFilter(status)"
+                                               class="custom-checkbox mr-2"/>
+                                        <span :class="['text-xs px-2 py-1 rounded font-medium', getStatusClass(status)]">{{ status }}</span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <!-- Top IPs -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Top IPs</label>
+                                <div class="space-y-1 max-h-32 overflow-y-auto">
+                                    <label v-for="ip in availableFilters.ips.slice(0, 10)" :key="ip" class="flex items-center">
+                                        <input type="checkbox" :checked="dataFilters.selectedIPs.includes(ip)" 
+                                               @change="toggleIPFilter(ip)"
+                                               class="custom-checkbox mr-2"/>
+                                        <span class="text-sm text-gray-700 dark:text-gray-300 truncate">{{ ip }}</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4 flex items-center justify-between">
+                            <span class="text-sm text-gray-600 dark:text-gray-300">
+                                Showing {{ filteredLogData.length }} of {{ logData.length }} entries
+                            </span>
+                            <button @click="clearFilters" 
+                                    class="px-4 py-2 text-sm bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors">
+                                Clear Filters
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Analysis Results Tables -->
+                    <div v-for="result in [...analysisResults, ...customAnalysisResults]" :key="result.type" class="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
                         <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{{ result.name }} - {{ result.threats.length }} threats</h3>
                         <div class="overflow-x-auto">
                             <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -301,9 +512,17 @@
                                     <tr v-for="threat in result.threats.slice(0, 100)" :key="threat.id">
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{{ threat.timestamp }}</td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{{ threat.ip }}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{{ threat.method }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <span :class="['text-xs px-2 py-1 rounded font-medium', getMethodClass(threat.method)]">
+                                                {{ threat.method }}
+                                            </span>
+                                        </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white truncate max-w-xs">{{ threat.url }}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{{ threat.status }}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <span :class="['text-xs px-2 py-1 rounded font-medium', getStatusClass(threat.status)]">
+                                                {{ threat.status }}
+                                            </span>
+                                        </td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -343,6 +562,191 @@
             </div>
         </div>
     </div>
+        <!-- Result Modal -->
+        <div v-if="showResultModal" @click="closeResultModal" 
+             class="fixed inset-0 bg-black/50 flex justify-center z-50 p-4 overflow-y-auto sm:items-center items-start">
+            <div @click.stop class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-y-auto animate-scale-in">
+                <div class="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center space-x-3">
+                        <div class="p-2 rounded-lg" :style="{ backgroundColor: currentResult?.color + '20' }">
+                            <i :class="currentResult?.isCustom ? 'fas fa-magic' : 'fas fa-shield-alt'" 
+                               class="text-xl" :style="{ color: currentResult?.color }"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-semibold text-gray-900 dark:text-white">{{ currentResult?.name }} Results</h2>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">{{ currentResult?.threats.length }} threats detected</p>
+                        </div>
+                    </div>
+                    <button @click="closeResultModal" 
+                            class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="p-6">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead class="bg-gray-50 dark:bg-gray-700">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Timestamp</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">IP Address</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Method</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">URL</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">User Agent</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                <tr v-for="threat in currentResult?.threats" :key="threat.id">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{{ threat.timestamp }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{{ threat.ip }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span :class="['text-xs px-2 py-1 rounded font-medium', getMethodClass(threat.method)]">
+                                            {{ threat.method }}
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-4 text-sm text-gray-900 dark:text-white break-all max-w-xs">{{ threat.url }}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span :class="['text-xs px-2 py-1 rounded font-medium', getStatusClass(threat.status)]">
+                                            {{ threat.status }}
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-4 text-sm text-gray-900 dark:text-white break-all max-w-xs">{{ threat.userAgent || '-' }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Report Modal -->
+        <div v-if="showReportModal" @click="closeReportModal" 
+             class="fixed inset-0 bg-black/50 flex justify-center z-50 p-4 overflow-y-auto sm:items-center items-start">
+            <div @click.stop class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-y-auto animate-scale-in">
+                <div class="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center space-x-3">
+                        <div class="p-2 bg-purple-100 dark:bg-purple-900/20 rounded-lg">
+                            <i class="fas fa-chart-bar text-purple-600 dark:text-purple-400"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-semibold text-gray-900 dark:text-white">Security Analysis Report</h2>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">AI-powered comprehensive security assessment</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button @click="showReportConfig = !showReportConfig" 
+                                class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                            <i class="fas fa-cog"></i>
+                        </button>
+                        <button @click="closeReportModal" 
+                                class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Report Config Panel -->
+                <div v-if="showReportConfig" class="p-6 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">AI Provider Configuration</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">AI Provider</label>
+                            <select v-model="aiProvider" @change="saveAiConfig" 
+                                    class="w-full px-4 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900 dark:text-white">
+                                <option v-for="provider in llmProviders" :key="provider.id" :value="provider.id">
+                                    {{ provider.name }}
+                                </option>
+                            </select>
+                        </div>
+                        <div>
+                            <div class="flex items-center justify-between mb-2">
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">API Key</label>
+                                <a v-if="currentProvider?.apiKeyLink" :href="currentProvider.apiKeyLink" target="_blank" rel="noopener noreferrer"
+                                   class="text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 flex items-center space-x-1">
+                                    <span>Get API Key</span>
+                                    <i class="fas fa-external-link-alt text-xs"></i>
+                                </a>
+                            </div>
+                            <input v-model="aiApiKey" @input="saveAiConfig" type="password" 
+                                   class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white" 
+                                   placeholder="Enter your API key..."/>
+                        </div>
+                        <div v-if="currentProvider?.customEndpoint">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">API Endpoint</label>
+                            <input v-model="customEndpoint" @input="saveAiConfig" type="url" 
+                                   class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white" 
+                                   :placeholder="currentProvider.defaultEndpoint || 'https://api.example.com/v1/chat/completions'"/>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex-1 flex flex-col min-h-0">
+                    <!-- Report Generation Interface -->
+                    <div v-if="!reportContent" class="p-8 text-center">
+                        <div class="max-w-md mx-auto">
+                            <div class="p-4 bg-purple-100 dark:bg-purple-900/20 rounded-full w-20 h-20 mx-auto mb-6 flex items-center justify-center">
+                                <i class="fas fa-sparkles text-purple-600 dark:text-purple-400 text-2xl"></i>
+                            </div>
+                            <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">Generate AI Security Report</h3>
+                            <p class="text-gray-600 dark:text-gray-300 mb-8">
+                                Create a comprehensive security analysis report with AI-powered insights, 
+                                recommendations, and actionable security measures based on your log analysis results.
+                            </p>
+                            <div v-if="!aiApiKey" class="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                                <p class="text-sm text-yellow-800 dark:text-yellow-200">
+                                    Please configure your AI provider settings above to generate reports.
+                                </p>
+                            </div>
+                            <button @click="generateReport" :disabled="!aiApiKey || isGeneratingReport"
+                                    class="flex items-center justify-center space-x-2 px-8 py-3 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors mx-auto">
+                                <i v-if="isGeneratingReport" class="fas fa-spinner fa-spin"></i>
+                                <i v-else class="fas fa-chart-bar"></i>
+                                <span>{{ isGeneratingReport ? 'Generating...' : 'Generate Security Report' }}</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Report Display -->
+                    <div v-else class="flex flex-col h-full">
+                        <div class="flex items-center justify-between px-6 py-3 border-b border-gray-200 dark:border-gray-700">
+                            <div class="flex space-x-1">
+                                <button @click="reportTab = 'preview'" 
+                                        :class="['report-tab px-4 py-2 text-sm font-medium rounded-lg transition-colors', reportTab === 'preview' ? 'active' : '']">
+                                    Preview
+                                </button>
+                                <button @click="reportTab = 'markdown'" 
+                                        :class="['report-tab px-4 py-2 text-sm font-medium rounded-lg transition-colors', reportTab === 'markdown' ? 'active' : '']">
+                                    Markdown
+                                </button>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <button @click="copyReport" 
+                                        class="flex items-center space-x-1 px-3 py-1 text-sm bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors">
+                                    <i class="fas fa-copy"></i>
+                                    <span>Copy</span>
+                                </button>
+                                <button @click="downloadMarkdown" 
+                                        class="flex items-center space-x-1 px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
+                                    <i class="fas fa-download"></i>
+                                    <span>MD</span>
+                                </button>
+                                <button @click="downloadHTML" 
+                                        class="flex items-center space-x-1 px-3 py-1 text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors">
+                                    <i class="fas fa-download"></i>
+                                    <span>HTML</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="flex-1 min-h-0">
+                            <div v-if="reportTab === 'preview'" class="p-6 prose prose-lg max-w-none dark:prose-invert overflow-y-auto h-full report-content" v-html="reportContent"></div>
+                            <div v-else class="p-6 h-full">
+                                <pre class="bg-gray-900 dark:bg-gray-950 text-gray-100 p-4 rounded-lg overflow-x-auto text-sm font-mono whitespace-pre-wrap border border-gray-700 h-full overflow-y-auto">{{ reportMarkdown }}</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
 
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>

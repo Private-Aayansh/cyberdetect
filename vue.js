@@ -60,7 +60,48 @@ const attackTypes = [
     }
 ];
 
-// Detection functions - exact same logic as original
+// LLM Providers configuration
+const llmProviders = [
+    {
+        id: "gemini",
+        name: "Google Gemini",
+        description: "Google's Gemini AI model",
+        requiresApiKey: true,
+        apiKeyLink: "https://makersuite.google.com/app/apikey"
+    },
+    {
+        id: "openai",
+        name: "OpenAI GPT",
+        description: "OpenAI's GPT models",
+        requiresApiKey: true,
+        apiKeyLink: "https://platform.openai.com/api-keys"
+    },
+    {
+        id: "anthropic",
+        name: "Anthropic Claude",
+        description: "Anthropic's Claude models",
+        requiresApiKey: true,
+        apiKeyLink: "https://console.anthropic.com/account/keys"
+    },
+    {
+        id: "aipipe",
+        name: "AIPipe",
+        description: "AIPipe.org API service",
+        requiresApiKey: true,
+        customEndpoint: true,
+        defaultEndpoint: "https://aipipe.org/openrouter/v1/chat/completions",
+        apiKeyLink: "https://aipipe.org/"
+    },
+    {
+        id: "custom",
+        name: "Custom Endpoint",
+        description: "Custom OpenAI-compatible API endpoint",
+        requiresApiKey: true,
+        customEndpoint: true
+    }
+];
+
+// Detection functions - corrected to match script.js exactly
 const detectionFunctions = {
     'sql-injection': {
         name: 'SQL Injection',
@@ -69,34 +110,38 @@ const detectionFunctions = {
     const sqlPatterns = [
         /('|(\\%27))|(;|(\\%3B))/i,
         /(union|select|insert|update|delete|drop|create|alter|exec|execute)/i,
-        /(\\'|\\"|\\;|\\%27|\\%22|\\%3B)/i,
-        /(or|and)\\s+(1=1|true|false)/i,
-        /\\b(union|select|insert|update|delete|drop|create|alter|exec|execute)\\b/i,
-        /\\b(script|javascript|vbscript|onload|onerror|onclick)/i
+        /(\\\\|\\%5C)|(\\"|\\%22)/i,
+        /(or|and)\\s*(=|like|in)/i,
+        /\\b(script|javascript|vbscript|onload|onerror|onclick)\\b/i,
+        /\\b(alert|confirm|prompt)\\s*\\(/i,
+        /<script[^>]*>.*?<\\/script>/i
     ];
     
     const url = logEntry.url || '';
     const userAgent = logEntry.userAgent || '';
+    const referer = logEntry.referer || '';
     
     return sqlPatterns.some(pattern => 
-        pattern.test(url) || pattern.test(userAgent)
+        pattern.test(url) || pattern.test(userAgent) || pattern.test(referer)
     );
 }`,
         detect: function(logEntry) {
             const sqlPatterns = [
                 /('|(\%27))|(;|(\%3B))/i,
                 /(union|select|insert|update|delete|drop|create|alter|exec|execute)/i,
-                /(\\'|\\"|\\;|\%27|\%22|\%3B)/i,
-                /(or|and)\s+(1=1|true|false)/i,
-                /\b(union|select|insert|update|delete|drop|create|alter|exec|execute)\b/i,
-                /\b(script|javascript|vbscript|onload|onerror|onclick)\b/i
+                /(\\|%5C)|("|%22)/i,
+                /(or|and)\s*(=|like|in)/i,
+                /\b(script|javascript|vbscript|onload|onerror|onclick)\b/i,
+                /\b(alert|confirm|prompt)\s*\(/i,
+                /<script[^>]*>.*?<\/script>/i
             ];
             
             const url = logEntry.url || '';
             const userAgent = logEntry.userAgent || '';
+            const referer = logEntry.referer || '';
             
             return sqlPatterns.some(pattern => 
-                pattern.test(url) || pattern.test(userAgent)
+                pattern.test(url) || pattern.test(userAgent) || pattern.test(referer)
             );
         }
     },
@@ -108,14 +153,19 @@ const detectionFunctions = {
         /\\.\\.\\/|\\.\\.\\\\/i,
         /\\%2e\\%2e\\%2f|\\%2e\\%2e\\%5c/i,
         /\\%252e\\%252e\\%252f/i,
-        /\\/etc\\/passwd|\\/etc\\/shadow/i,
-        /\\/windows\\/system32/i,
-        /\\.\\.\\\\|\\.\\.\\//i
+        /\\/etc\\/passwd|\\/etc\\/shadow|\\/etc\\/hosts/i,
+        /\\/windows\\/system32|\\/winnt/i,
+        /\\.\\.\\\\|\\.\\.\\//i,
+        /\\/proc\\/|\\/sys\\/|\\/dev\\//i,
+        /\\%00/i
     ];
     
     const url = logEntry.url || '';
+    const userAgent = logEntry.userAgent || '';
     
-    return pathPatterns.some(pattern => pattern.test(url));
+    return pathPatterns.some(pattern => 
+        pattern.test(url) || pattern.test(userAgent)
+    );
 }`,
         detect: function(logEntry) {
             const pathPatterns = [
@@ -123,14 +173,19 @@ const detectionFunctions = {
                 /\.\.\\/i,
                 /%2e%2e%2f|%2e%2e%5c/i,
                 /%252e%252e%252f/i,
-                /\/etc\/passwd|\/etc\/shadow/i,
-                /\/windows\/system32/i,
-                /\.\.\\/i
+                /\/etc\/passwd|\/etc\/shadow|\/etc\/hosts/i,
+                /\/windows\/system32|\/winnt/i,
+                /\.\.\\/i,
+                /\/proc\/|\/sys\/|\/dev\//i,
+                /%00/i
             ];
             
             const url = logEntry.url || '';
+            const userAgent = logEntry.userAgent || '';
             
-            return pathPatterns.some(pattern => pattern.test(url));
+            return pathPatterns.some(pattern => 
+                pattern.test(url) || pattern.test(userAgent)
+            );
         }
     },
     'bots': {
@@ -138,10 +193,11 @@ const detectionFunctions = {
         description: 'Identifies automated bot and crawler activity',
         code: `function detectBots(logEntry) {
     const botPatterns = [
-        /bot|crawler|spider|scraper/i,
-        /curl|wget|python|java|go-http/i,
-        /automated|script|tool/i,
-        /scan|probe|test/i
+        /bot|crawler|spider|scraper|scan/i,
+        /curl|wget|python|java|go-http|libwww/i,
+        /automated|script|tool|monitor/i,
+        /nikto|nmap|sqlmap|burp|zap/i,
+        /masscan|nessus|openvas|acunetix/i
     ];
     
     const userAgent = logEntry.userAgent || '';
@@ -155,19 +211,26 @@ const detectionFunctions = {
         /\\/robots\\.txt/i,
         /\\/sitemap\\.xml/i,
         /\\/wp-admin/i,
-        /\\/admin/i
+        /\\/admin/i,
+        /\\/phpmyadmin/i,
+        /\\/test/i,
+        /\\/backup/i
     ];
     
     const isSuspiciousRequest = suspiciousPatterns.some(pattern => pattern.test(url));
     
-    return isBotUserAgent || isSuspiciousRequest;
+    // Check for rapid requests (simplified)
+    const hasEmptyUserAgent = !userAgent || userAgent.trim() === '' || userAgent === '-';
+    
+    return isBotUserAgent || isSuspiciousRequest || hasEmptyUserAgent;
 }`,
         detect: function(logEntry) {
             const botPatterns = [
-                /bot|crawler|spider|scraper/i,
-                /curl|wget|python|java|go-http/i,
-                /automated|script|tool/i,
-                /scan|probe|test/i
+                /bot|crawler|spider|scraper|scan/i,
+                /curl|wget|python|java|go-http|libwww/i,
+                /automated|script|tool|monitor/i,
+                /nikto|nmap|sqlmap|burp|zap/i,
+                /masscan|nessus|openvas|acunetix/i
             ];
             
             const userAgent = logEntry.userAgent || '';
@@ -179,12 +242,16 @@ const detectionFunctions = {
                 /\/robots\.txt/i,
                 /\/sitemap\.xml/i,
                 /\/wp-admin/i,
-                /\/admin/i
+                /\/admin/i,
+                /\/phpmyadmin/i,
+                /\/test/i,
+                /\/backup/i
             ];
             
             const isSuspiciousRequest = suspiciousPatterns.some(pattern => pattern.test(url));
+            const hasEmptyUserAgent = !userAgent || userAgent.trim() === '' || userAgent === '-';
             
-            return isBotUserAgent || isSuspiciousRequest;
+            return isBotUserAgent || isSuspiciousRequest || hasEmptyUserAgent;
         }
     },
     'lfi-rfi': {
@@ -192,43 +259,53 @@ const detectionFunctions = {
         description: 'Detects Local and Remote File Inclusion attempts',
         code: `function detectLFIRFI(logEntry) {
     const lfiPatterns = [
-        /\\?.*file=|\\?.*page=|\\?.*include=/i,
-        /php:\\/\\/|data:\\/\\/|expect:\\/\\//i,
-        /\\/proc\\/self\\/environ/i,
-        /\\/var\\/log/i,
-        /\\.\\.\\//i
+        /\\?.*file=|\\?.*page=|\\?.*include=|\\?.*path=/i,
+        /php:\\/\\/|data:\\/\\/|expect:\\/\\/|zip:\\/\\//i,
+        /\\/proc\\/self\\/environ|\\/proc\\/version/i,
+        /\\/var\\/log|\\/var\\/mail/i,
+        /\\.\\.\\//i,
+        /\\%00/i,
+        /file:\\/\\/\\/|file:\\/\\/localhost/i
     ];
     
     const rfiPatterns = [
-        /http:\\/\\/|https:\\/\\/|ftp:\\/\\//i,
-        /\\?.*url=http|\\?.*file=http/i
+        /\\?.*url=http|\\?.*file=http|\\?.*include=http/i,
+        /\\?.*path=http|\\?.*page=http/i,
+        /http:\\/\\/.*\\.(txt|php|asp|jsp)/i,
+        /https:\\/\\/.*\\.(txt|php|asp|jsp)/i
     ];
     
     const url = logEntry.url || '';
+    const userAgent = logEntry.userAgent || '';
     
-    const isLFI = lfiPatterns.some(pattern => pattern.test(url));
-    const isRFI = rfiPatterns.some(pattern => pattern.test(url));
+    const isLFI = lfiPatterns.some(pattern => pattern.test(url) || pattern.test(userAgent));
+    const isRFI = rfiPatterns.some(pattern => pattern.test(url) || pattern.test(userAgent));
     
     return isLFI || isRFI;
 }`,
         detect: function(logEntry) {
             const lfiPatterns = [
-                /\?.*file=|\?.*page=|\?.*include=/i,
-                /php:\/\/|data:\/\/|expect:\/\//i,
-                /\/proc\/self\/environ/i,
-                /\/var\/log/i,
-                /\.\.\//i
+                /\?.*file=|\?.*page=|\?.*include=|\?.*path=/i,
+                /php:\/\/|data:\/\/|expect:\/\/|zip:\/\//i,
+                /\/proc\/self\/environ|\/proc\/version/i,
+                /\/var\/log|\/var\/mail/i,
+                /\.\.\//i,
+                /%00/i,
+                /file:\/\/\/|file:\/\/localhost/i
             ];
             
             const rfiPatterns = [
-                /http:\/\/|https:\/\/|ftp:\/\//i,
-                /\?.*url=http|\?.*file=http/i
+                /\?.*url=http|\?.*file=http|\?.*include=http/i,
+                /\?.*path=http|\?.*page=http/i,
+                /http:\/\/.*\.(txt|php|asp|jsp)/i,
+                /https:\/\/.*\.(txt|php|asp|jsp)/i
             ];
             
             const url = logEntry.url || '';
+            const userAgent = logEntry.userAgent || '';
             
-            const isLFI = lfiPatterns.some(pattern => pattern.test(url));
-            const isRFI = rfiPatterns.some(pattern => pattern.test(url));
+            const isLFI = lfiPatterns.some(pattern => pattern.test(url) || pattern.test(userAgent));
+            const isRFI = rfiPatterns.some(pattern => pattern.test(url) || pattern.test(userAgent));
             
             return isLFI || isRFI;
         }
@@ -238,34 +315,40 @@ const detectionFunctions = {
         description: 'Detects WordPress-specific vulnerability scanning',
         code: `function detectWordPressProbes(logEntry) {
     const wpPatterns = [
-        /\\/wp-admin|\\/wp-login|\\/wp-content/i,
-        /\\/wp-includes|\\/wp-config/i,
-        /\\/xmlrpc\\.php/i,
-        /\\/wp-json/i,
-        /wp-|wordpress/i
+        /\\/wp-admin|\\/wp-login|\\/wp-content|\\/wp-includes/i,
+        /\\/wp-config|\\/wp-settings|\\/wp-load/i,
+        /\\/xmlrpc\\.php|\\/wp-cron\\.php/i,
+        /\\/wp-json|\\/wp-api/i,
+        /wp-|wordpress/i,
+        /\\/plugins\\/|\\/themes\\//i,
+        /\\/uploads\\/|\\/wp-content\\/uploads/i
     ];
     
     const url = logEntry.url || '';
     const userAgent = logEntry.userAgent || '';
+    const referer = logEntry.referer || '';
     
     return wpPatterns.some(pattern => 
-        pattern.test(url) || pattern.test(userAgent)
+        pattern.test(url) || pattern.test(userAgent) || pattern.test(referer)
     );
 }`,
         detect: function(logEntry) {
             const wpPatterns = [
-                /\/wp-admin|\/wp-login|\/wp-content/i,
-                /\/wp-includes|\/wp-config/i,
-                /\/xmlrpc\.php/i,
-                /\/wp-json/i,
-                /wp-|wordpress/i
+                /\/wp-admin|\/wp-login|\/wp-content|\/wp-includes/i,
+                /\/wp-config|\/wp-settings|\/wp-load/i,
+                /\/xmlrpc\.php|\/wp-cron\.php/i,
+                /\/wp-json|\/wp-api/i,
+                /wp-|wordpress/i,
+                /\/plugins\/|\/themes\//i,
+                /\/uploads\/|\/wp-content\/uploads/i
             ];
             
             const url = logEntry.url || '';
             const userAgent = logEntry.userAgent || '';
+            const referer = logEntry.referer || '';
             
             return wpPatterns.some(pattern => 
-                pattern.test(url) || pattern.test(userAgent)
+                pattern.test(url) || pattern.test(userAgent) || pattern.test(referer)
             );
         }
     },
@@ -274,40 +357,48 @@ const detectionFunctions = {
         description: 'Detects brute force and credential stuffing attacks',
         code: `function detectBruteForce(logEntry) {
     const bruteForcePatterns = [
-        /\\/login|\\/signin|\\/auth/i,
-        /\\/admin|\\/administrator/i,
-        /password|passwd|pwd/i,
-        /username|user|email/i
+        /\\/login|\\/signin|\\/auth|\\/authenticate/i,
+        /\\/admin|\\/administrator|\\/wp-admin/i,
+        /password|passwd|pwd|credential/i,
+        /username|user|email|account/i,
+        /\\/api\\/auth|\\/oauth/i
     ];
     
     const url = logEntry.url || '';
     const method = logEntry.method || '';
     const status = parseInt(logEntry.status) || 0;
+    const userAgent = logEntry.userAgent || '';
     
     // Check for login-related URLs
     const isLoginAttempt = bruteForcePatterns.some(pattern => pattern.test(url));
     
     // Check for POST requests to login endpoints with failed status
-    const isFailedLogin = method === 'POST' && (status === 401 || status === 403);
+    const isFailedLogin = method === 'POST' && (status === 401 || status === 403 || status === 422);
     
-    return isLoginAttempt && isFailedLogin;
+    // Check for suspicious user agents
+    const suspiciousUA = /curl|wget|python|script/i.test(userAgent);
+    
+    return (isLoginAttempt && isFailedLogin) || (isLoginAttempt && suspiciousUA);
 }`,
         detect: function(logEntry) {
             const bruteForcePatterns = [
-                /\/login|\/signin|\/auth/i,
-                /\/admin|\/administrator/i,
-                /password|passwd|pwd/i,
-                /username|user|email/i
+                /\/login|\/signin|\/auth|\/authenticate/i,
+                /\/admin|\/administrator|\/wp-admin/i,
+                /password|passwd|pwd|credential/i,
+                /username|user|email|account/i,
+                /\/api\/auth|\/oauth/i
             ];
             
             const url = logEntry.url || '';
             const method = logEntry.method || '';
             const status = parseInt(logEntry.status) || 0;
+            const userAgent = logEntry.userAgent || '';
             
             const isLoginAttempt = bruteForcePatterns.some(pattern => pattern.test(url));
-            const isFailedLogin = method === 'POST' && (status === 401 || status === 403);
+            const isFailedLogin = method === 'POST' && (status === 401 || status === 403 || status === 422);
+            const suspiciousUA = /curl|wget|python|script/i.test(userAgent);
             
-            return isLoginAttempt && isFailedLogin;
+            return (isLoginAttempt && isFailedLogin) || (isLoginAttempt && suspiciousUA);
         }
     },
     'errors': {
@@ -316,36 +407,48 @@ const detectionFunctions = {
         code: `function detectHTTPErrors(logEntry) {
     const status = parseInt(logEntry.status) || 0;
     const url = logEntry.url || '';
+    const method = logEntry.method || '';
     
     // Focus on 4xx and 5xx errors
     const isError = status >= 400;
     
     // Check for suspicious error patterns
     const suspiciousPatterns = [
-        /\\.php|\\.asp|\\.jsp/i,
-        /admin|config|backup/i,
-        /test|debug|dev/i
+        /\\.php|\\.asp|\\.jsp|\\.cgi/i,
+        /admin|config|backup|test|debug|dev/i,
+        /\\.env|\\.git|\\.svn|\\.htaccess/i,
+        /database|db|sql|mysql/i,
+        /upload|file|document/i
     ];
     
     const isSuspiciousUrl = suspiciousPatterns.some(pattern => pattern.test(url));
     
-    return isError && isSuspiciousUrl;
+    // High-value error codes
+    const criticalErrors = [403, 404, 500, 502, 503];
+    const isCriticalError = criticalErrors.includes(status);
+    
+    return isError && (isSuspiciousUrl || isCriticalError);
 }`,
         detect: function(logEntry) {
             const status = parseInt(logEntry.status) || 0;
             const url = logEntry.url || '';
+            const method = logEntry.method || '';
             
             const isError = status >= 400;
             
             const suspiciousPatterns = [
-                /\.php|\.asp|\.jsp/i,
-                /admin|config|backup/i,
-                /test|debug|dev/i
+                /\.php|\.asp|\.jsp|\.cgi/i,
+                /admin|config|backup|test|debug|dev/i,
+                /\.env|\.git|\.svn|\.htaccess/i,
+                /database|db|sql|mysql/i,
+                /upload|file|document/i
             ];
             
             const isSuspiciousUrl = suspiciousPatterns.some(pattern => pattern.test(url));
+            const criticalErrors = [403, 404, 500, 502, 503];
+            const isCriticalError = criticalErrors.includes(status);
             
-            return isError && isSuspiciousUrl;
+            return isError && (isSuspiciousUrl || isCriticalError);
         }
     },
     'internal-ip': {
@@ -354,26 +457,31 @@ const detectionFunctions = {
         code: `function detectInternalIPAccess(logEntry) {
     const ip = logEntry.ip || '';
     const url = logEntry.url || '';
+    const referer = logEntry.referer || '';
     
-    // Check for internal IP patterns in URL
+    // Check for internal IP patterns in URL or referer
     const internalIPPatterns = [
         /192\\.168\\.|10\\.|172\\.(1[6-9]|2[0-9]|3[01])\\./,
         /127\\.0\\.0\\.1|localhost/i,
-        /0\\.0\\.0\\.0|255\\.255\\.255\\.255/
+        /0\\.0\\.0\\.0|255\\.255\\.255\\.255/,
+        /\\b(?:192\\.168|10\\.|172\\.(?:1[6-9]|2[0-9]|3[01]))\\./
     ];
     
     // Check for attempts to access internal resources
     const internalResourcePatterns = [
-        /\\/internal|\\/private|\\/admin/i,
-        /\\/config|\\/settings|\\/env/i
+        /\\/internal|\\/private|\\/admin|\\/management/i,
+        /\\/config|\\/settings|\\/env|\\/environment/i,
+        /\\/status|\\/health|\\/metrics|\\/debug/i,
+        /\\/api\\/internal|\\/api\\/private/i,
+        /localhost|127\\.0\\.0\\.1/i
     ];
     
     const hasInternalIP = internalIPPatterns.some(pattern => 
-        pattern.test(ip) || pattern.test(url)
+        pattern.test(ip) || pattern.test(url) || pattern.test(referer)
     );
     
     const accessesInternalResource = internalResourcePatterns.some(pattern => 
-        pattern.test(url)
+        pattern.test(url) || pattern.test(referer)
     );
     
     return hasInternalIP || accessesInternalResource;
@@ -381,24 +489,29 @@ const detectionFunctions = {
         detect: function(logEntry) {
             const ip = logEntry.ip || '';
             const url = logEntry.url || '';
+            const referer = logEntry.referer || '';
             
             const internalIPPatterns = [
                 /192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\./,
                 /127\.0\.0\.1|localhost/i,
-                /0\.0\.0\.0|255\.255\.255\.255/
+                /0\.0\.0\.0|255\.255\.255\.255/,
+                /\b(?:192\.168|10\.|172\.(?:1[6-9]|2[0-9]|3[01]))\./
             ];
             
             const internalResourcePatterns = [
-                /\/internal|\/private|\/admin/i,
-                /\/config|\/settings|\/env/i
+                /\/internal|\/private|\/admin|\/management/i,
+                /\/config|\/settings|\/env|\/environment/i,
+                /\/status|\/health|\/metrics|\/debug/i,
+                /\/api\/internal|\/api\/private/i,
+                /localhost|127\.0\.0\.1/i
             ];
             
             const hasInternalIP = internalIPPatterns.some(pattern => 
-                pattern.test(ip) || pattern.test(url)
+                pattern.test(ip) || pattern.test(url) || pattern.test(referer)
             );
             
             const accessesInternalResource = internalResourcePatterns.some(pattern => 
-                pattern.test(url)
+                pattern.test(url) || pattern.test(referer)
             );
             
             return hasInternalIP || accessesInternalResource;
@@ -413,6 +526,7 @@ createApp({
             attackTypes: attackTypes,
             logData: [],
             analysisResults: [],
+            customAnalysisResults: [],
             selectedFile: null,
             isDragging: false,
             isLoading: false,
@@ -420,12 +534,81 @@ createApp({
             scanningTypes: [],
             toasts: [],
             showFunctionModal: false,
+            showResultModal: false,
+            showReportModal: false,
             currentFunction: null,
-            isDarkMode: false
+            currentResult: null,
+            isDarkMode: false,
+            
+            // AI Configuration
+            aiProvider: 'gemini',
+            aiApiKey: '',
+            customEndpoint: '',
+            showAiConfig: false,
+            
+            // Report Generation
+            reportContent: '',
+            reportMarkdown: '',
+            showReportConfig: false,
+            reportTab: 'preview',
+            isGeneratingReport: false,
+            
+            // Data Table Filtering
+            dataFilters: {
+                searchTerm: '',
+                selectedMethods: [],
+                selectedStatuses: [],
+                selectedIPs: [],
+                dateRange: { start: '', end: '' }
+            },
+            availableFilters: {
+                methods: [],
+                statuses: [],
+                ips: []
+            }
         };
+    },
+    computed: {
+        filteredLogData() {
+            let filtered = [...this.logData];
+            
+            if (this.dataFilters.searchTerm) {
+                const term = this.dataFilters.searchTerm.toLowerCase();
+                filtered = filtered.filter(entry => 
+                    (entry.url || '').toLowerCase().includes(term) ||
+                    (entry.ip || '').toLowerCase().includes(term) ||
+                    (entry.userAgent || '').toLowerCase().includes(term)
+                );
+            }
+            
+            if (this.dataFilters.selectedMethods.length > 0) {
+                filtered = filtered.filter(entry => 
+                    this.dataFilters.selectedMethods.includes(entry.method)
+                );
+            }
+            
+            if (this.dataFilters.selectedStatuses.length > 0) {
+                filtered = filtered.filter(entry => 
+                    this.dataFilters.selectedStatuses.includes(entry.status)
+                );
+            }
+            
+            if (this.dataFilters.selectedIPs.length > 0) {
+                filtered = filtered.filter(entry => 
+                    this.dataFilters.selectedIPs.includes(entry.ip)
+                );
+            }
+            
+            return filtered;
+        },
+        
+        currentProvider() {
+            return llmProviders.find(p => p.id === this.aiProvider);
+        }
     },
     mounted() {
         this.initializeTheme();
+        this.loadAiConfig();
     },
     methods: {
         initializeTheme() {
@@ -448,6 +631,29 @@ createApp({
             } else {
                 document.documentElement.classList.remove('dark');
             }
+        },
+        
+        loadAiConfig() {
+            const saved = localStorage.getItem('cyberdetect-ai-config');
+            if (saved) {
+                try {
+                    const config = JSON.parse(saved);
+                    this.aiProvider = config.provider || 'gemini';
+                    this.aiApiKey = config.apiKey || '';
+                    this.customEndpoint = config.customEndpoint || '';
+                } catch (e) {
+                    console.error('Failed to load AI config:', e);
+                }
+            }
+        },
+        
+        saveAiConfig() {
+            const config = {
+                provider: this.aiProvider,
+                apiKey: this.aiApiKey,
+                customEndpoint: this.customEndpoint
+            };
+            localStorage.setItem('cyberdetect-ai-config', JSON.stringify(config));
         },
         
         showToast(message, type = 'info') {
@@ -502,20 +708,7 @@ createApp({
                 if (!response.ok) throw new Error('Failed to fetch demo dataset');
                 
                 const arrayBuffer = await response.arrayBuffer();
-                const zip = new JSZip();
-                const zipContent = await zip.loadAsync(arrayBuffer);
-                
-                // Find the log file in the zip
-                const logFile = Object.keys(zipContent.files).find(name => 
-                    name.endsWith('.log') || name.endsWith('.txt')
-                );
-                
-                if (!logFile) {
-                    throw new Error('No log file found in the demo dataset');
-                }
-                
-                const logContent = await zipContent.files[logFile].async('text');
-                await this.processLogData(logContent);
+                await this.processZipFile(arrayBuffer);
                 
                 this.showToast('Demo dataset loaded successfully!', 'success');
             } catch (error) {
@@ -552,17 +745,9 @@ createApp({
                 let content;
                 
                 if (file.name.endsWith('.zip')) {
-                    const zip = new JSZip();
-                    const zipContent = await zip.loadAsync(file);
-                    const logFile = Object.keys(zipContent.files).find(name => 
-                        name.endsWith('.log') || name.endsWith('.txt')
-                    );
-                    
-                    if (!logFile) {
-                        throw new Error('No log file found in the ZIP archive');
-                    }
-                    
-                    content = await zipContent.files[logFile].async('text');
+                    const arrayBuffer = await file.arrayBuffer();
+                    await this.processZipFile(arrayBuffer);
+                    return;
                 } else if (file.name.endsWith('.gz')) {
                     const arrayBuffer = await file.arrayBuffer();
                     const decompressed = pako.inflate(new Uint8Array(arrayBuffer), { to: 'string' });
@@ -581,6 +766,34 @@ createApp({
             }
         },
         
+        async processZipFile(arrayBuffer) {
+            const zip = new JSZip();
+            const zipContent = await zip.loadAsync(arrayBuffer);
+            
+            // Find all potential log files
+            const logFiles = Object.keys(zipContent.files).filter(name => {
+                const file = zipContent.files[name];
+                return !file.dir && (
+                    name.endsWith('.log') || 
+                    name.endsWith('.txt') ||
+                    name.includes('log') ||
+                    name.includes('access') ||
+                    name.includes('error')
+                );
+            });
+            
+            if (logFiles.length === 0) {
+                throw new Error('No log files found in the ZIP archive');
+            }
+            
+            // Use the first log file found
+            const firstLogFile = logFiles[0];
+            const content = await zipContent.files[firstLogFile].async('text');
+            
+            this.showToast(`Found ${logFiles.length} log file(s), processing: ${firstLogFile}`, 'info');
+            await this.processLogData(content);
+        },
+        
         async processLogData(content) {
             const lines = content.split('\n').filter(line => line.trim());
             this.logData = [];
@@ -596,11 +809,12 @@ createApp({
                 }
             }
             
+            this.updateAvailableFilters();
             this.showToast(`Processed ${this.logData.length} log entries`, 'success');
         },
         
         parseLogLine(line) {
-            // Apache Common Log Format parser
+            // Apache Common Log Format parser - enhanced
             const apacheRegex = /^(\S+) \S+ \S+ \[([^\]]+)\] "(\S+) ([^"]*)" (\d+) (\S+)(?: "([^"]*)" "([^"]*)")?/;
             const match = line.match(apacheRegex);
             
@@ -618,7 +832,37 @@ createApp({
                 };
             }
             
+            // Try alternative formats
+            const nginxRegex = /^(\S+) - - \[([^\]]+)\] "(\S+) ([^"]*)" (\d+) (\S+) "([^"]*)" "([^"]*)"/;
+            const nginxMatch = line.match(nginxRegex);
+            
+            if (nginxMatch) {
+                return {
+                    ip: nginxMatch[1],
+                    timestamp: nginxMatch[2],
+                    method: nginxMatch[3],
+                    url: nginxMatch[4],
+                    status: nginxMatch[5],
+                    size: nginxMatch[6] === '-' ? 0 : parseInt(nginxMatch[6]),
+                    referer: nginxMatch[7] || '',
+                    userAgent: nginxMatch[8] || '',
+                    raw: line
+                };
+            }
+            
             return null;
+        },
+        
+        updateAvailableFilters() {
+            const methods = [...new Set(this.logData.map(entry => entry.method).filter(Boolean))];
+            const statuses = [...new Set(this.logData.map(entry => entry.status).filter(Boolean))];
+            const ips = [...new Set(this.logData.map(entry => entry.ip).filter(Boolean))].slice(0, 50); // Limit IPs
+            
+            this.availableFilters = {
+                methods: methods.sort(),
+                statuses: statuses.sort(),
+                ips: ips.sort()
+            };
         },
         
         async runAllScans() {
@@ -673,6 +917,8 @@ createApp({
                     type: attackType.endpoint,
                     name: attackType.name,
                     color: attackType.color,
+                    severity: attackType.severity,
+                    description: attackType.description,
                     threats: threats,
                     timestamp: new Date().toISOString()
                 };
@@ -712,19 +958,318 @@ createApp({
             this.currentFunction = null;
         },
         
-        viewTable(attackType) {
-            this.activeView = 'data';
-            // Optionally scroll to the specific table
-            this.$nextTick(() => {
-                const element = document.querySelector(`[data-type="${attackType.endpoint}"]`);
-                if (element) {
-                    element.scrollIntoView({ behavior: 'smooth' });
-                }
-            });
+        viewResult(attackType) {
+            const result = this.getAnalysisResult(attackType.endpoint);
+            if (result) {
+                this.currentResult = result;
+                this.showResultModal = true;
+            }
+        },
+        
+        closeResultModal() {
+            this.showResultModal = false;
+            this.currentResult = null;
         },
         
         getAnalysisResult(endpoint) {
             return this.analysisResults.find(r => r.type === endpoint);
+        },
+        
+        // AI Analysis Methods
+        async createCustomAnalysis(description) {
+            if (!this.aiApiKey) {
+                this.showToast('Please configure your AI API key first', 'warning');
+                return;
+            }
+            
+            if (!description.trim()) {
+                this.showToast('Please provide a description for the analysis', 'warning');
+                return;
+            }
+            
+            this.showToast('Creating custom analysis...', 'info');
+            
+            try {
+                const prompt = this.buildAnalysisPrompt(description);
+                const functionCode = await this.callAI(prompt);
+                
+                // Parse and execute the generated function
+                const customFunction = this.parseGeneratedFunction(functionCode, description);
+                
+                // Run the analysis
+                const threats = [];
+                for (const logEntry of this.logData) {
+                    if (customFunction.detect(logEntry)) {
+                        threats.push(logEntry);
+                    }
+                }
+                
+                const result = {
+                    type: 'custom-' + Date.now(),
+                    name: customFunction.name,
+                    color: '#8B5CF6',
+                    severity: 'medium',
+                    description: description,
+                    threats: threats,
+                    timestamp: new Date().toISOString(),
+                    isCustom: true,
+                    code: functionCode
+                };
+                
+                this.customAnalysisResults.push(result);
+                this.showToast(`Custom analysis completed: ${threats.length} threats found`, 'success');
+                
+            } catch (error) {
+                console.error('Error creating custom analysis:', error);
+                this.showToast('Failed to create custom analysis: ' + error.message, 'error');
+            }
+        },
+        
+        buildAnalysisPrompt(description) {
+            return `Create a JavaScript function to detect security threats in web server logs based on this description: "${description}"
+
+The function should:
+1. Take a logEntry object with properties: ip, timestamp, method, url, status, size, referer, userAgent, raw
+2. Return true if the log entry matches the threat pattern, false otherwise
+3. Use appropriate regex patterns and logic to detect the specified threats
+4. Be efficient and accurate
+
+Example log entry structure:
+{
+  ip: "192.168.1.1",
+  timestamp: "10/Oct/2000:13:55:36 -0700",
+  method: "GET",
+  url: "/apache_pb.gif",
+  status: "200",
+  size: 2326,
+  referer: "http://www.example.com/start.html",
+  userAgent: "Mozilla/4.08 [en] (Win98; I ;Nav)",
+  raw: "192.168.1.1 - - [10/Oct/2000:13:55:36 -0700] \"GET /apache_pb.gif HTTP/1.0\" 200 2326 \"http://www.example.com/start.html\" \"Mozilla/4.08 [en] (Win98; I ;Nav)\""
+}
+
+Return only the JavaScript function code, no explanations:`;
+        },
+        
+        async callAI(prompt) {
+            const provider = this.currentProvider;
+            let endpoint, headers, body;
+            
+            switch (provider.id) {
+                case 'gemini':
+                    endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${this.aiApiKey}`;
+                    headers = { 'Content-Type': 'application/json' };
+                    body = {
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: { temperature: 0.1, maxOutputTokens: 2048 }
+                    };
+                    break;
+                    
+                case 'openai':
+                    endpoint = 'https://api.openai.com/v1/chat/completions';
+                    headers = {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.aiApiKey}`
+                    };
+                    body = {
+                        model: 'gpt-3.5-turbo',
+                        messages: [{ role: 'user', content: prompt }],
+                        temperature: 0.1,
+                        max_tokens: 2048
+                    };
+                    break;
+                    
+                case 'anthropic':
+                    endpoint = 'https://api.anthropic.com/v1/messages';
+                    headers = {
+                        'Content-Type': 'application/json',
+                        'x-api-key': this.aiApiKey,
+                        'anthropic-version': '2023-06-01'
+                    };
+                    body = {
+                        model: 'claude-3-sonnet-20240229',
+                        max_tokens: 2048,
+                        messages: [{ role: 'user', content: prompt }]
+                    };
+                    break;
+                    
+                case 'aipipe':
+                case 'custom':
+                    endpoint = this.customEndpoint || provider.defaultEndpoint;
+                    headers = {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.aiApiKey}`
+                    };
+                    body = {
+                        model: 'gpt-3.5-turbo',
+                        messages: [{ role: 'user', content: prompt }],
+                        temperature: 0.1,
+                        max_tokens: 2048
+                    };
+                    break;
+            }
+            
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(body)
+            });
+            
+            if (!response.ok) {
+                throw new Error(`AI API request failed: ${response.status} ${response.statusText}`);
+            }
+            
+            const data = await response.json();
+            
+            // Extract response based on provider
+            switch (provider.id) {
+                case 'gemini':
+                    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                case 'openai':
+                case 'aipipe':
+                case 'custom':
+                    return data.choices?.[0]?.message?.content || '';
+                case 'anthropic':
+                    return data.content?.[0]?.text || '';
+                default:
+                    throw new Error('Unknown AI provider response format');
+            }
+        },
+        
+        parseGeneratedFunction(code, description) {
+            try {
+                // Extract function from code
+                const functionMatch = code.match(/function\s+\w+\s*\([^)]*\)\s*\{[\s\S]*\}/);
+                if (!functionMatch) {
+                    throw new Error('No valid function found in generated code');
+                }
+                
+                const functionCode = functionMatch[0];
+                
+                // Create a safe function
+                const func = new Function('logEntry', `
+                    ${functionCode}
+                    return ${functionCode.match(/function\s+(\w+)/)[1]}(logEntry);
+                `);
+                
+                return {
+                    name: `Custom: ${description.substring(0, 50)}${description.length > 50 ? '...' : ''}`,
+                    description: description,
+                    code: functionCode,
+                    detect: func
+                };
+            } catch (error) {
+                throw new Error('Failed to parse generated function: ' + error.message);
+            }
+        },
+        
+        // Report Generation Methods
+        async generateReport() {
+            if (this.analysisResults.length === 0 && this.customAnalysisResults.length === 0) {
+                this.showToast('No analysis results available for report generation', 'warning');
+                return;
+            }
+            
+            this.showReportModal = true;
+            
+            if (!this.aiApiKey) {
+                return; // Show config panel
+            }
+            
+            this.isGeneratingReport = true;
+            
+            try {
+                const reportPrompt = this.buildReportPrompt();
+                const reportContent = await this.callAI(reportPrompt);
+                
+                this.reportMarkdown = reportContent;
+                this.reportContent = marked.parse(reportContent);
+                
+                this.showToast('Security report generated successfully!', 'success');
+            } catch (error) {
+                console.error('Error generating report:', error);
+                this.showToast('Failed to generate report: ' + error.message, 'error');
+            } finally {
+                this.isGeneratingReport = false;
+            }
+        },
+        
+        buildReportPrompt() {
+            const allResults = [...this.analysisResults, ...this.customAnalysisResults];
+            const totalThreats = allResults.reduce((sum, result) => sum + result.threats.length, 0);
+            
+            let prompt = `Generate a comprehensive cybersecurity analysis report based on the following log analysis results:
+
+**Analysis Summary:**
+- Total log entries analyzed: ${this.logData.length}
+- Total security threats detected: ${totalThreats}
+- Analysis types performed: ${allResults.length}
+
+**Detailed Results:**
+`;
+            
+            for (const result of allResults) {
+                prompt += `
+**${result.name}** (${result.severity} severity)
+- Description: ${result.description}
+- Threats detected: ${result.threats.length}
+- Sample threats: ${result.threats.slice(0, 3).map(t => `${t.ip} - ${t.method} ${t.url} (${t.status})`).join(', ')}
+`;
+            }
+            
+            prompt += `
+Please create a professional security report in Markdown format that includes:
+
+1. **Executive Summary** - High-level overview of security posture
+2. **Threat Analysis** - Detailed breakdown of each threat type
+3. **Risk Assessment** - Severity levels and potential impact
+4. **Recommendations** - Specific actionable security measures
+5. **Technical Details** - Key findings and patterns
+6. **Conclusion** - Overall security assessment and next steps
+
+Use proper Markdown formatting with headers, tables, lists, and emphasis. Make it suitable for both technical and executive audiences.`;
+            
+            return prompt;
+        },
+        
+        closeReportModal() {
+            this.showReportModal = false;
+            this.reportContent = '';
+            this.reportMarkdown = '';
+        },
+        
+        copyReport() {
+            const content = this.reportTab === 'preview' ? this.reportMarkdown : this.reportMarkdown;
+            navigator.clipboard.writeText(content).then(() => {
+                this.showToast('Report copied to clipboard!', 'success');
+            });
+        },
+        
+        downloadMarkdown() {
+            const blob = new Blob([this.reportMarkdown], { type: 'text/markdown' });
+            saveAs(blob, 'security-analysis-report.md');
+        },
+        
+        downloadHTML() {
+            const html = `<!DOCTYPE html>
+<html>
+<head>
+    <title>Security Analysis Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .severity-high { color: #dc2626; font-weight: bold; }
+        .severity-medium { color: #ea580c; font-weight: bold; }
+        .severity-low { color: #059669; font-weight: bold; }
+    </style>
+</head>
+<body>
+${this.reportContent}
+</body>
+</html>`;
+            const blob = new Blob([html], { type: 'text/html' });
+            saveAs(blob, 'security-analysis-report.html');
         },
         
         exportCSV() {
@@ -735,7 +1280,7 @@ createApp({
             
             let csvContent = 'Attack Type,Timestamp,IP Address,Method,URL,Status Code,User Agent\n';
             
-            for (const result of this.analysisResults) {
+            for (const result of [...this.analysisResults, ...this.customAnalysisResults]) {
                 for (const threat of result.threats) {
                     const row = [
                         result.name,
@@ -764,11 +1309,14 @@ createApp({
             const exportData = {
                 exportDate: new Date().toISOString(),
                 totalLogEntries: this.logData.length,
-                analysisResults: this.analysisResults.map(result => ({
+                analysisResults: [...this.analysisResults, ...this.customAnalysisResults].map(result => ({
                     attackType: result.name,
                     endpoint: result.type,
+                    severity: result.severity,
+                    description: result.description,
                     threatsFound: result.threats.length,
-                    threats: result.threats
+                    threats: result.threats,
+                    isCustom: result.isCustom || false
                 }))
             };
             
@@ -777,8 +1325,61 @@ createApp({
             this.showToast('JSON exported successfully!', 'success');
         },
         
-        generateReport() {
-            this.showToast('Report generation feature coming soon!', 'info');
+        // Filter methods
+        toggleMethodFilter(method) {
+            const index = this.dataFilters.selectedMethods.indexOf(method);
+            if (index > -1) {
+                this.dataFilters.selectedMethods.splice(index, 1);
+            } else {
+                this.dataFilters.selectedMethods.push(method);
+            }
+        },
+        
+        toggleStatusFilter(status) {
+            const index = this.dataFilters.selectedStatuses.indexOf(status);
+            if (index > -1) {
+                this.dataFilters.selectedStatuses.splice(index, 1);
+            } else {
+                this.dataFilters.selectedStatuses.push(status);
+            }
+        },
+        
+        toggleIPFilter(ip) {
+            const index = this.dataFilters.selectedIPs.indexOf(ip);
+            if (index > -1) {
+                this.dataFilters.selectedIPs.splice(index, 1);
+            } else {
+                this.dataFilters.selectedIPs.push(ip);
+            }
+        },
+        
+        clearFilters() {
+            this.dataFilters = {
+                searchTerm: '',
+                selectedMethods: [],
+                selectedStatuses: [],
+                selectedIPs: [],
+                dateRange: { start: '', end: '' }
+            };
+        },
+        
+        getMethodClass(method) {
+            const classes = {
+                'GET': 'method-get',
+                'POST': 'method-post',
+                'PUT': 'method-put',
+                'DELETE': 'method-delete'
+            };
+            return classes[method] || 'method-get';
+        },
+        
+        getStatusClass(status) {
+            const code = parseInt(status);
+            if (code >= 200 && code < 300) return 'status-2xx';
+            if (code >= 300 && code < 400) return 'status-3xx';
+            if (code >= 400 && code < 500) return 'status-4xx';
+            if (code >= 500) return 'status-5xx';
+            return 'status-2xx';
         }
     }
 }).mount('#app');
