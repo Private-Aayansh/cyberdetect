@@ -1,7 +1,6 @@
-// Cyber Detect - Standalone JavaScript Application
-// Advanced Security Log Analysis Platform
+import ATTACK_TYPES from './attackTypes.js';
+import LLM_PROVIDERS from './llmProviders.js';
 
-// Global State Management
 const AppState = {
     theme: localStorage.getItem('cyberdetect-theme') || 'light',
     selectedFile: null,
@@ -18,7 +17,6 @@ const AppState = {
         path: '',
         search: ''
     },
-    // Pagination + Facets state for Data Table and modals
     tableState: {
         page: 1,
         perPage: 50,
@@ -38,116 +36,8 @@ const AppState = {
     },
     parsedEntries: []
 };
-
-// Attack Types Configuration
-const ATTACK_TYPES = [
-    {
-        name: 'SQL Injection',
-        description: 'Attempts to inject malicious SQL code into database queries',
-        severity: 'high',
-        color: '#DC2626',
-        endpoint: 'sql-injection'
-    },
-    {
-        name: 'Path Traversal',
-        description: 'Attempts to access files outside the web root directory',
-        severity: 'high',
-        color: '#EA580C',
-        endpoint: 'path-traversal'
-    },
-    {
-        name: 'Bot Detection',
-        description: 'Automated bot and crawler activity detection',
-        severity: 'medium',
-        color: '#CA8A04',
-        endpoint: 'bots'
-    },
-    {
-        name: 'LFI/RFI Attacks',
-        description: 'Local and Remote File Inclusion attack attempts',
-        severity: 'high',
-        color: '#DC2626',
-        endpoint: 'lfi-rfi'
-    },
-    {
-        name: 'WordPress Probes',
-        description: 'WordPress-specific vulnerability scanning attempts',
-        severity: 'medium',
-        color: '#7C3AED',
-        endpoint: 'wp-probe'
-    },
-    {
-        name: 'Brute Force',
-        description: 'Password brute force and credential stuffing attacks',
-        severity: 'high',
-        color: '#B91C1C',
-        endpoint: 'brute-force'
-    },
-    {
-        name: 'HTTP Errors',
-        description: 'Suspicious HTTP error patterns and responses',
-        severity: 'low',
-        color: '#059669',
-        endpoint: 'errors'
-    },
-    {
-        name: 'Internal IP Access',
-        description: 'Unauthorized access attempts to internal IP ranges',
-        severity: 'medium',
-        color: '#0284C7',
-        endpoint: 'internal-ip'
-    }
-];
-
-// LLM Providers Configuration
-const LLM_PROVIDERS = [
-    {
-        id: 'gemini',
-        name: 'Google Gemini',
-        description: 'Google\'s Gemini AI model',
-        requiresApiKey: true,
-        apiKeyLink: 'https://makersuite.google.com/app/apikey'
-    },
-    {
-        id: 'openai',
-        name: 'OpenAI GPT',
-        description: 'OpenAI\'s GPT models',
-        requiresApiKey: true,
-        apiKeyLink: 'https://platform.openai.com/api-keys'
-    },
-    {
-        id: 'anthropic',
-        name: 'Anthropic Claude',
-        description: 'Anthropic\'s Claude models',
-        requiresApiKey: true,
-        apiKeyLink: 'https://console.anthropic.com/account/keys'
-    },
-    {
-        id: 'aipipe',
-        name: 'AIPipe',
-        description: 'AIPipe.org API service',
-        requiresApiKey: true,
-        customEndpoint: true,
-        defaultEndpoint: 'https://aipipe.org/openrouter/v1/chat/completions',
-        apiKeyLink: 'https://aipipe.org/'
-    },
-    {
-        id: 'custom',
-        name: 'Custom Endpoint',
-        description: 'Custom OpenAI-compatible API endpoint',
-        requiresApiKey: true,
-        customEndpoint: true
-    }
-];
-
-// Utility Functions
 const Utils = {
-    // Generate unique ID
-    generateId() {
-        return Date.now().toString(36) + Math.random().toString(36).substr(2);
-    },
-
-    // Format file size
+    generateId(){try{return crypto.randomUUID()}catch(e){return Date.now().toString(36)+Math.random().toString(36).slice(2)}},
     formatFileSize(bytes) {
         if (bytes === 0) return '0 Bytes';
         const k = 1024;
@@ -155,13 +45,9 @@ const Utils = {
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     },
-
-    // Format date
     formatDate(dateString) {
         return new Date(dateString).toLocaleString();
     },
-
-    // Debounce function
     debounce(func, wait) {
         let timeout;
         return function executedFunction(...args) {
@@ -173,8 +59,6 @@ const Utils = {
             timeout = setTimeout(later, wait);
         };
     },
-
-    // Download file
     downloadFile(content, filename, contentType) {
         const blob = new Blob([content], { type: contentType });
         const url = URL.createObjectURL(blob);
@@ -186,8 +70,6 @@ const Utils = {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
     },
-
-    // Copy to clipboard
     async copyToClipboard(text) {
         try {
             await navigator.clipboard.writeText(text);
@@ -197,16 +79,12 @@ const Utils = {
             return false;
         }
     },
-
-    // Escape HTML
     escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
     }
 };
-
-// Toast Notification System
 const Toast = {
     container: null,
 
@@ -226,15 +104,11 @@ const Toast = {
                 <i class="fas fa-times text-sm"></i>
             </button>
         `;
-
-        // Add close functionality
         toast.querySelector('.toast-close').addEventListener('click', () => {
             this.remove(toast);
         });
 
         this.container.appendChild(toast);
-
-        // Auto remove after duration
         if (duration > 0) {
             setTimeout(() => {
                 this.remove(toast);
@@ -281,8 +155,6 @@ const Toast = {
         return this.show(message, 'info', duration);
     }
 };
-
-// Theme Management
 const ThemeManager = {
     init() {
         this.applyTheme(AppState.theme);
@@ -311,14 +183,10 @@ const ThemeManager = {
         });
     }
 };
-
-// Log Parser
 const LogParser = {
     parseLogFile(content) {
         const lines = content.split('\n');
         const parsed = [];
-        
-        // Apache/Nginx combined log format pattern
         const logPattern = /(?<ip>\S+) - - \[(?<timestamp>.*?)\] "(?<method>\S+) (?<path>\S+) (?<protocol>[^"]+)" (?<status>\d{3}) (?<bytes>\S+) "(?<referrer>[^"]*)" "(?<user_agent>[^"]*)" (?<host>\S+) (?<server_ip>\S+)/;
 
         for (const line of lines) {
@@ -343,256 +211,80 @@ const LogParser = {
         return parsed;
     },
 
-    parseTimestamp(timestamp) {
-        try {
-            // Parse common log format timestamp: DD/MMM/YYYY:HH:MM:SS TIMEZONE
-            const match = timestamp.match(/(\d{2})\/(\w{3})\/(\d{4}):(\d{2}):(\d{2}):(\d{2}) ([+-]\d{4})/);
-            if (!match) {
-                return timestamp;
-            }
-            
-            const [, day, monthName, year, hour, minute, second, timezone] = match;
-            
-            // Convert month name to number
-            const monthMap = {
-                'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
-                'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
-                'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
-            };
-            
-            const month = monthMap[monthName];
-            if (!month) {
-                return timestamp;
-            }
-            
-            // Create ISO format string
-            const isoString = `${year}-${month}-${day}T${hour}:${minute}:${second}${timezone}`;
-            
-            // Validate the date
-            const date = new Date(isoString);
-            if (isNaN(date.getTime())) {
-                return timestamp;
-            }
-            
-            return date.toISOString();
-        } catch {
-            return timestamp;
-        }
-    }
+    parseTimestamp(ts){try{if(typeof dayjs!=='undefined'){const m=ts.match(/(\d{2})\/(\w{3})\/(\d{4}):(\d{2}):(\d{2}):(\d{2}) ([+-]\d{4})/);if(!m)return ts;const months={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};const month=months[m[2]];if(month==null)return ts;const d=dayjs(new Date(Date.UTC(+m[3],month,+m[1],+m[4],+m[5],+m[6])));return d.isValid()?new Date(d.valueOf()).toISOString():ts;} }catch(e){}
+        try{const match=ts.match(/(\d{2})\/(\w{3})\/(\d{4}):(\d{2}):(\d{2}):(\d{2}) ([+-]\d{4})/);if(!match)return ts;const[,day,monthName,year,hour,minute,second,timezone]=match;const monthMap={'Jan':'01','Feb':'02','Mar':'03','Apr':'04','May':'05','Jun':'06','Jul':'07','Aug':'08','Sep':'09','Oct':'10','Nov':'11','Dec':'12'};const month=monthMap[monthName];if(!month)return ts;const isoString=`${year}-${month}-${day}T${hour}:${minute}:${second}${timezone}`;const date=new Date(isoString);return isNaN(date.getTime())?ts:date.toISOString()}catch{return ts}}
 };
-
-// Security Detectors
 const SecurityDetectors = {
-    // SQL Injection Detector
     detectSqlInjection(entries) {
         const patterns = [
-            // Union-based injections
-            "union\\s+(all\\s+)?select",
-            "select\\s+.*\\s+from",
-            "select\\s+\\*",
-            
-            // Boolean-based blind injections
-            "(and|or)\\s+\\d+\\s*[=<>!]+\\s*\\d+",
-            "(and|or)\\s+['\"]?[a-z]+['\"]?\\s*[=<>!]+\\s*['\"]?[a-z]+['\"]?",
-            "(and|or)\\s+\\d+\\s*(and|or)\\s+\\d+",
-            
-            // Time-based blind injections
-            "(sleep|waitfor|delay)\\s*\\(\\s*\\d+\\s*\\)",
-            "benchmark\\s*\\(\\s*\\d+",
-            "pg_sleep\\s*\\(\\s*\\d+\\s*\\)",
-            
-            // Error-based injections
-            "(convert|cast|char)\\s*\\(",
-            "concat\\s*\\(",
-            "group_concat\\s*\\(",
-            "having\\s+\\d+\\s*[=<>!]+\\s*\\d+",
-            
-            // Authentication bypass
+            "union\\s+(all\\s+)?select", "select\\s+.*\\s+from", "select\\s+\\*",
+            "(and|or)\\s+\\d+\\s*[=<>!]+\\s*\\d+", "(and|or)\\s+['\"]?[a-z]+['\"]?\\s*[=<>!]+\\s*['\"]?[a-z]+['\"]?",
+            "(and|or)\\s+\\d+\\s*(and|or)\\s+\\d+", "(sleep|waitfor|delay)\\s*\\(\\s*\\d+\\s*\\)",
+            "benchmark\\s*\\(\\s*\\d+", "pg_sleep\\s*\\(\\s*\\d+\\s*\\)", "(convert|cast|char)\\s*\\(",
+            "concat\\s*\\(", "group_concat\\s*\\(", "having\\s+\\d+\\s*[=<>!]+\\s*\\d+",
             "(admin|user|login)['\"]?\\s*(=|like)\\s*['\"]?\\s*(or|and)",
             "['\"]\\s*(or|and)\\s*['\"]?[^'\"]*['\"]?\\s*(=|like)",
             "['\"]\\s*(or|and)\\s*\\d+\\s*[=<>!]+\\s*\\d+",
-            
-            // SQL commands and functions
-            "(drop|delete|truncate|insert|update)\\s+(table|from|into)",
-            "(exec|execute|sp_|xp_)\\w*",
-            "(information_schema|sys\\.|mysql\\.|pg_)",
-            "(load_file|into\\s+outfile|dumpfile)",
-            
-            // Comment patterns
-            "(--|#|\\*/|\\*\\*)",
-            "/\\*.*\\*/",
-            
-            // Special characters and encodings
-            "(%27|%22|%2d%2d|%23)",
-            "(0x[0-9a-f]+)",
-            "(char\\s*\\(\\s*\\d+)"
+            "(drop|delete|truncate|insert|update)\\s+(table|from|into)", "(exec|execute|sp_|xp_)\\w*",
+            "(information_schema|sys\\.|mysql\\.|pg_)", "(load_file|into\\s+outfile|dumpfile)",
+            "(--|#|\\*/|\\*\\*)", "/\\*.*\\*/", "(%27|%22|%2d%2d|%23)", "(0x[0-9a-f]+)", "(char\\s*\\(\\s*\\d+)"
         ];
-        
-        const sqliRegex = new RegExp(
-            patterns.map(pattern => `(${pattern})`).join('|'),
-            'gim'
-        );
-        
-        const suspicious = entries.filter(entry => {
-            if (!entry.path) return false;
-            const decodedPath = decodeURIComponent(entry.path);
-            return sqliRegex.test(decodedPath);
-        });
-        
-        return suspicious.map(entry => ({
-            ...entry,
-            suspicion_reason: 'SQL injection pattern detected',
-            attack_type: 'SQL Injection'
-        }));
+        const sqliRegex = new RegExp(patterns.join('|'), 'gim');
+        return this._filterMap(entries, e => e.path && sqliRegex.test(decodeURIComponent(e.path)), 'SQL injection pattern detected', 'SQL Injection');
     },
 
-    // Path Traversal Detector
     detectPathTraversal(entries) {
-        const suspicious = entries.filter(entry => {
-            const path = entry.path;
-            if (!path) return false;
-
-            // Check for path traversal patterns
-            const hasTraversalPattern = new RegExp('(\\.\\./|%2e%2e%2f|%2e%2f|%2f\\.\\.|/\\.{2})', 'i').test(path);
-            
-            // Check for excessive directory depth
-            const hasExcessiveDepth = (path.match(/\//g) || []).length > 15;
-            
-            return hasTraversalPattern || hasExcessiveDepth;
-        });
-
-        return suspicious.map(entry => ({
-            ...entry,
-            suspicion_reason: 'Path traversal pattern detected',
-            attack_type: 'Path Traversal'
-        }));
+        const regex = /(\.\.\/|%2e%2e%2f|%2e%2f|%2f\.\.|\/\.\.)/i;
+        return this._filterMap(entries, e => e.path && (regex.test(e.path) || (e.path.match(/\//g) || []).length > 15), 'Path traversal pattern detected', 'Path Traversal');
     },
 
-    // Bot Detection
     detectBots(entries) {
-        const CRAWLERS = [
-            'googlebot', 'bingbot', 'baiduspider', 'yandexbot',
-            'duckduckbot', 'slurp', 'facebookexternalhit', 'twitterbot',
-            'applebot', 'linkedinbot', 'petalbot', 'semrushbot'
-        ];
-
-        const CLIENT_LIBS = [
-            'curl', 'wget', 'httpclient', 'python-requests', 'aiohttp',
-            'okhttp', 'java/', 'libwww-perl', 'go-http-client', 'restsharp',
-            'scrapy', 'httpie'
-        ];
-
-        function classifyUserAgent(ua) {
-            const userAgent = ua.toLowerCase();
-            
-            if (CRAWLERS.some(crawler => userAgent.includes(crawler))) {
-                return "Crawler Bot";
-            }
-            
-            if (CLIENT_LIBS.some(lib => userAgent.includes(lib))) {
-                return "Client Library Bot";
-            }
-            
-            if (userAgent.trim() === '' || userAgent.length < 10 || !userAgent.includes('mozilla')) {
-                return "Suspicious User-Agent";
-            }
-            
+        const CRAWLERS = ['googlebot','bingbot','baiduspider','yandexbot','duckduckbot','slurp','facebookexternalhit','twitterbot','applebot','linkedinbot','petalbot','semrushbot'];
+        const CLIENT_LIBS = ['curl','wget','httpclient','python-requests','aiohttp','okhttp','java/','libwww-perl','go-http-client','restsharp','scrapy','httpie'];
+        const classify = ua => {
+            const u = (ua || '').toLowerCase();
+            if (CRAWLERS.some(c => u.includes(c))) return "Crawler Bot";
+            if (CLIENT_LIBS.some(l => u.includes(l))) return "Client Library Bot";
+            if (!u.trim() || u.length < 10 || !u.includes('mozilla')) return "Suspicious User-Agent";
             return null;
-        }
-
-        const bots = entries.filter(entry => {
-            const botType = classifyUserAgent(entry.user_agent);
-            return botType !== null;
-        });
-
-        return bots.map(entry => ({
-            ...entry,
-            suspicion_reason: classifyUserAgent(entry.user_agent) || 'Bot detected',
-            attack_type: 'Bot Detection'
-        }));
+        };
+        return this._filterMap(entries, e => classify(e.user_agent), e => classify(e.user_agent), 'Bot Detection');
     },
 
-    // LFI/RFI Detector
     detectLfiRfi(entries) {
-        const pattern = /(etc\/passwd|proc\/self\/environ|input_file=|data:text)/i;
-
-        const suspicious = entries.filter(entry => {
-            return pattern.test(entry.path);
-        });
-
-        return suspicious.map(entry => ({
-            ...entry,
-            suspicion_reason: 'LFI/RFI pattern detected',
-            attack_type: 'LFI/RFI Attacks'
-        }));
+        return this._filterMap(entries, e => /(etc\/passwd|proc\/self\/environ|input_file=|data:text)/i.test(e.path), 'LFI/RFI pattern detected', 'LFI/RFI Attacks');
     },
 
-    // WordPress Probe Detector
     detectWpProbe(entries) {
-        const pattern = /(\.php|\/wp-|xmlrpc\.php|\?author=|\?p=)/i;
-
-        const suspicious = entries.filter(entry => {
-            return pattern.test(entry.path);
-        });
-
-        return suspicious.map(entry => ({
-            ...entry,
-            suspicion_reason: 'WordPress probe detected',
-            attack_type: 'WordPress Probes'
-        }));
+        return this._filterMap(entries, e => /(\.php|\/wp-|xmlrpc\.php|\?author=|\?p=)/i.test(e.path), 'WordPress probe detected', 'WordPress Probes');
     },
 
-    // Brute Force Detector
     detectBruteForce(entries) {
-        const loginPattern = /(login|admin|signin|wp-login\.php)/i;
         const badStatuses = ['401', '403', '429'];
-
-        const suspicious = entries.filter(entry => {
-            return loginPattern.test(entry.path) && badStatuses.includes(entry.status);
-        });
-
-        return suspicious.map(entry => ({
-            ...entry,
-            suspicion_reason: 'Brute force attempt detected',
-            attack_type: 'Brute Force'
-        }));
+        return this._filterMap(entries, e => /(login|admin|signin|wp-login\.php)/i.test(e.path) && badStatuses.includes(e.status), 'Brute force attempt detected', 'Brute Force');
     },
 
-    // HTTP Error Detector
     detectErrors(entries) {
         const badStatuses = ['403', '404', '406', '500', '502'];
-
-        const errors = entries.filter(entry => {
-            return badStatuses.includes(entry.status);
-        });
-
-        return errors.map(entry => ({
-            ...entry,
-            suspicion_reason: `HTTP error status: ${entry.status}`,
-            attack_type: 'HTTP Errors'
-        }));
+        return this._filterMap(entries, e => badStatuses.includes(e.status), e => `HTTP error status: ${e.status}`, 'HTTP Errors');
     },
 
-    // Internal IP Detector
     detectInternalIp(entries) {
-        const internal = entries.filter(entry => {
-            const ip = entry.ip;
-            return ip.startsWith('192.168.') ||
-                   ip.startsWith('10.') ||
-                   ip.startsWith('127.') ||
-                   ip.startsWith('172.');
-        });
-
-        return internal.map(entry => ({
-            ...entry,
-            suspicion_reason: 'Internal IP address detected',
-            attack_type: 'Internal IP Access'
-        }));
+        return this._filterMap(entries, e => /^192\.168\.|^10\.|^127\.|^172\./.test(e.ip), 'Internal IP address detected', 'Internal IP Access');
     },
 
-    // Get detector by endpoint
+    _filterMap(entries, predicate, reason, attackType) {
+        return entries
+            .filter(typeof predicate === 'function' ? predicate : e => predicate)
+            .map(e => ({
+                ...e,
+                suspicion_reason: typeof reason === 'function' ? reason(e) : reason,
+                attack_type: attackType
+            }));
+    },
+
     getDetector(endpoint) {
-        const detectorMap = {
+        return {
             'sql-injection': this.detectSqlInjection,
             'path-traversal': this.detectPathTraversal,
             'bots': this.detectBots,
@@ -601,12 +293,9 @@ const SecurityDetectors = {
             'brute-force': this.detectBruteForce,
             'errors': this.detectErrors,
             'internal-ip': this.detectInternalIp
-        };
-        return detectorMap[endpoint];
+        }[endpoint];
     }
 };
-
-// LLM Service for AI Analysis
 const LLMService = {
     async makeGeminiRequest(prompt, apiKey, options = {}) {
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
@@ -776,8 +465,6 @@ const LLMService = {
         }
 
         const data = await response.json();
-        
-        // Handle different response formats
         let text = '';
         if (data.choices && data.choices.length > 0) {
             text = data.choices[0].message?.content || data.choices[0].text || '';
@@ -830,8 +517,6 @@ const LLMService = {
         }
     }
 };
-
-// File Processing Service
 const FileProcessor = {
     async processFile(file) {
         if (file.name.endsWith('.zip')) {
@@ -895,8 +580,6 @@ const FileProcessor = {
         }
     }
 };
-
-// Analysis Service
 const AnalysisService = {
     async analyzeWithDetector(detectorEndpoint) {
         if (!AppState.parsedEntries.length) {
@@ -909,8 +592,6 @@ const AnalysisService = {
         }
 
         const results = detector.call(SecurityDetectors, AppState.parsedEntries);
-        
-        // Convert to ProcessedLogEntry format
         const processedResults = results.map(entry => ({
             ip: entry.ip,
             timestamp: entry.timestamp,
@@ -1008,7 +689,6 @@ Requirements:
 Example format:
 function detectThreats(entries) {
   return entries.filter(entry => {
-    // Your detection logic here
     if (/* condition */) {
       entry.suspicion_reason = "Reason for suspicion";
       return true;
@@ -1029,26 +709,16 @@ function detectThreats(entries) {
                     maxTokens: 1024,
                 }
             );
-
-            // Extract the function code from the response
             let functionCode = response.text.trim();
-            
-            // Clean up the response - remove markdown code blocks if present
             functionCode = functionCode.replace(/^```javascript\s*\n?/i, '');
             functionCode = functionCode.replace(/^```js\s*\n?/i, '');
             functionCode = functionCode.replace(/^```\s*\n?/i, '');
             functionCode = functionCode.replace(/\n?```\s*$/i, '');
             functionCode = functionCode.trim();
-            
-            // Validate that we have a function
             if (!functionCode.includes('function detectThreats')) {
                 throw new Error('Generated code does not contain the required detectThreats function');
             }
-
-            // Create a unique ID for this analysis
             const id = `dynamic-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-            
-            // Generate a name from the description
             const name = this.generateAnalysisName(description);
 
             const analysis = {
@@ -1058,8 +728,6 @@ function detectThreats(entries) {
                 functionCode,
                 createdAt: new Date().toISOString(),
             };
-
-            // Store the analysis
             AppState.dynamicAnalyses.push(analysis);
 
             return analysis;
@@ -1080,21 +748,14 @@ function detectThreats(entries) {
         }
 
         try {
-            // Create a safe execution environment
             const safeEval = new Function('entries', `
                 ${analysis.functionCode}
                 return detectThreats(entries);
             `);
-
-            // Execute the generated function
             const results = safeEval(AppState.parsedEntries);
-
-            // Validate results
             if (!Array.isArray(results)) {
                 throw new Error('Analysis function must return an array');
             }
-
-            // Convert to ProcessedLogEntry format
             return results.map(entry => ({
                 ip: entry.ip,
                 timestamp: entry.timestamp,
@@ -1117,14 +778,11 @@ function detectThreats(entries) {
     },
 
     generateAnalysisName(description) {
-        // Extract key terms and create a concise name
         const words = description.toLowerCase()
             .replace(/[^\w\s]/g, ' ')
             .split(/\s+/)
             .filter(word => word.length > 2)
             .filter(word => !['the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how', 'man', 'new', 'now', 'old', 'see', 'two', 'way', 'who', 'boy', 'did', 'its', 'let', 'put', 'say', 'she', 'too', 'use'].includes(word));
-
-        // Take first few meaningful words and capitalize
         const nameWords = words.slice(0, 3).map(word => 
             word.charAt(0).toUpperCase() + word.slice(1)
         );
@@ -1135,13 +793,9 @@ function detectThreats(entries) {
     canAnalyze(config) {
         const provider = LLM_PROVIDERS.find(p => p.id === config.provider);
         if (!provider) return false;
-
-        // Check if API key is required and provided
         if (provider.requiresApiKey && !config.apiKey.trim()) {
             return false;
         }
-
-        // Check if custom endpoint is required and provided (except for aipipe)
         if (provider.customEndpoint && config.provider === 'custom' && !config.customEndpoint?.trim()) {
             return false;
         }
@@ -1149,8 +803,6 @@ function detectThreats(entries) {
         return true;
     }
 };
-
-// Report Generation Service
 const ReportService = {
     async generateReport(allResults, summary, datasetUrl, fileName, config) {
         if (!this.canGenerateReport(config)) {
@@ -1171,16 +823,10 @@ const ReportService = {
                     maxTokens: 4000,
                 }
             );
-
-            // Clean up the response to remove markdown code block fences
             let cleanedText = response.text.trim();
-            
-            // Remove markdown code block delimiters if present
             cleanedText = cleanedText.replace(/^```markdown\s*\n?/i, '');
             cleanedText = cleanedText.replace(/^```\s*\n?/i, '');
             cleanedText = cleanedText.replace(/\n?```\s*$/i, '');
-            
-            // Remove any leading/trailing whitespace after cleanup
             cleanedText = cleanedText.trim();
             
             return cleanedText;
@@ -1191,20 +837,15 @@ const ReportService = {
     },
 
     prepareReportData(allResults, summary, fileName, datasetUrl) {
-        // Get top attack types
         const topAttackTypes = Object.entries(summary.attackTypeCounts)
             .sort(([, a], [, b]) => b - a)
             .slice(0, 10);
-
-        // Get recent attacks (last 24 hours if timestamps are available)
         const now = new Date();
         const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
         const recentAttacks = allResults.filter(entry => {
             const entryDate = new Date(entry.timestamp);
             return entryDate >= oneDayAgo;
         });
-
-        // Get most targeted paths
         const pathCounts = {};
         allResults.forEach(entry => {
             pathCounts[entry.path] = (pathCounts[entry.path] || 0) + 1;
@@ -1212,8 +853,6 @@ const ReportService = {
         const topPaths = Object.entries(pathCounts)
             .sort(([, a], [, b]) => b - a)
             .slice(0, 10);
-
-        // Get attack methods distribution
         const methodCounts = {};
         allResults.forEach(entry => {
             methodCounts[entry.method] = (methodCounts[entry.method] || 0) + 1;
@@ -1238,8 +877,6 @@ const ReportService = {
 
     identifyCriticalFindings(allResults, summary) {
         const findings = [];
-
-        // High-severity attack types with significant activity
         const highSeverityTypes = ['SQL Injection', 'Path Traversal', 'LFI/RFI Attacks', 'Brute Force'];
         highSeverityTypes.forEach(type => {
             const count = summary.attackTypeCounts[type] || 0;
@@ -1252,8 +889,6 @@ const ReportService = {
                 });
             }
         });
-
-        // Top attackers with high activity
         summary.topAttackers.slice(0, 3).forEach(attacker => {
             if (attacker.count > 50) {
                 findings.push({
@@ -1264,8 +899,6 @@ const ReportService = {
                 });
             }
         });
-
-        // High error rates
         const errorCodes = ['403', '404', '500', '502'];
         const totalErrors = errorCodes.reduce((sum, code) => sum + (summary.statusCodeDistribution[code] || 0), 0);
         if (totalErrors > allResults.length * 0.3) {
@@ -1332,8 +965,6 @@ Use proper Markdown formatting with headers, bullet points, tables where appropr
         return true;
     }
 };
-
-// UI Management
 const UI = {
     init() {
         this.bindEvents();
@@ -1342,15 +973,12 @@ const UI = {
     },
 
     bindEvents() {
-        // Navigation
         document.querySelectorAll('.nav-tab').forEach(tab => {
             tab.addEventListener('click', (e) => {
                 const view = e.currentTarget.dataset.view;
                 this.switchView(view);
             });
         });
-
-        // File upload
         const fileInput = document.getElementById('file-input');
         const fileUploadArea = document.getElementById('file-upload-area');
 
@@ -1359,8 +987,6 @@ const UI = {
                 this.handleFileSelect(e.target.files[0]);
             }
         });
-
-        // Drag and drop
         fileUploadArea.addEventListener('dragover', (e) => {
             e.preventDefault();
             fileUploadArea.classList.add('file-upload-drag');
@@ -1380,18 +1006,12 @@ const UI = {
                 this.handleFileSelect(files[0]);
             }
         });
-
-        // Demo dataset
         document.getElementById('load-demo-btn').addEventListener('click', () => {
             this.loadDemoDataset();
         });
-
-        // Run all scans
         document.getElementById('run-all-btn').addEventListener('click', () => {
             this.runAllScans();
         });
-
-        // Export buttons
         document.getElementById('export-csv-btn').addEventListener('click', () => {
             this.exportData('csv');
         });
@@ -1403,8 +1023,6 @@ const UI = {
         document.getElementById('generate-report-btn').addEventListener('click', () => {
             this.openReportModal();
         });
-
-        // AI Configuration
         document.getElementById('ai-config-toggle').addEventListener('click', () => {
             this.toggleAIConfig();
         });
@@ -1425,32 +1043,23 @@ const UI = {
             AppState.aiConfig.customEndpoint = e.target.value;
             this.updateAIWarning();
         });
-
-        // Dynamic Analysis
         document.getElementById('dynamic-analysis-form').addEventListener('submit', (e) => {
             e.preventDefault();
             this.createDynamicAnalysis();
         });
-
-        // Example prompts
         document.querySelectorAll('.example-prompt').forEach(button => {
             button.addEventListener('click', (e) => {
                 const prompt = e.currentTarget.dataset.prompt;
                 document.getElementById('analysis-description').value = prompt;
             });
         });
-
-        // Modal events
         this.bindModalEvents();
     },
 
     bindModalEvents() {
-        // Details Modal
         document.getElementById('close-modal').addEventListener('click', () => {
             this.closeModal('details-modal');
         });
-
-        // Function Modal
         document.getElementById('close-function-modal').addEventListener('click', () => {
             this.closeModal('function-modal');
         });
@@ -1462,8 +1071,6 @@ const UI = {
         document.getElementById('copy-function-btn').addEventListener('click', () => {
             this.copyFunctionCode();
         });
-
-        // Report Modal
         document.getElementById('close-report-modal').addEventListener('click', () => {
             this.closeModal('report-modal');
         });
@@ -1475,13 +1082,9 @@ const UI = {
         document.getElementById('generate-report-final-btn').addEventListener('click', () => {
             this.generateReport();
         });
-
-        // Report provider configuration
         document.getElementById('report-ai-provider-select').addEventListener('change', (e) => {
             this.updateReportProviderConfig(e.target.value);
         });
-
-        // Report tabs
         document.getElementById('report-tab-preview').addEventListener('click', () => {
             this.switchReportTab('preview');
         });
@@ -1489,8 +1092,6 @@ const UI = {
         document.getElementById('report-tab-markdown').addEventListener('click', () => {
             this.switchReportTab('markdown');
         });
-
-        // Report actions
         document.getElementById('copy-report-btn').addEventListener('click', () => {
             this.copyReport();
         });
@@ -1502,8 +1103,6 @@ const UI = {
         document.getElementById('download-html-btn').addEventListener('click', () => {
             this.downloadReport('html');
         });
-
-        // Close modals on backdrop click
         document.querySelectorAll('.fixed.inset-0').forEach(modal => {
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) {
@@ -1518,21 +1117,16 @@ const UI = {
     },
 
     switchView(viewName) {
-        // Update navigation
         document.querySelectorAll('.nav-tab').forEach(tab => {
             tab.classList.remove('active');
         });
         document.querySelector(`[data-view="${viewName}"]`).classList.add('active');
-
-        // Update content
         document.querySelectorAll('.view-content').forEach(view => {
             view.classList.remove('active');
         });
         document.getElementById(`${viewName}-view`).classList.add('active');
 
         AppState.currentView = viewName;
-
-        // Update view-specific content
         if (viewName === 'dashboard') {
             this.updateDashboard();
         } else if (viewName === 'data') {
@@ -1543,26 +1137,14 @@ const UI = {
     async handleFileSelect(file) {
         try {
             AppState.selectedFile = file;
-            
-            // Show file info
             document.getElementById('file-name').textContent = file.name;
             document.getElementById('file-size').textContent = Utils.formatFileSize(file.size);
             document.getElementById('selected-file-info').classList.remove('hidden');
-            
-            // Process file
             const processedFile = await FileProcessor.processFile(file);
-            
-            // Parse log content
             AppState.parsedEntries = LogParser.parseLogFile(processedFile.content);
-            
-            // Clear previous results
             AppState.allResults = [];
             AppState.scanResults = {};
-            
-            // Show attack types section
             document.getElementById('attack-types-section').classList.remove('hidden');
-            
-            // Generate attack cards
             this.generateAttackCards();
             
             Toast.success(`File "${file.name}" loaded successfully. Found ${AppState.parsedEntries.length} log entries.`);
@@ -1581,8 +1163,6 @@ const UI = {
             loadBtn.disabled = true;
             
             Toast.info('Downloading demo dataset...');
-            
-            // Fetch the demo file
             const response = await fetch('https://raw.githubusercontent.com/Yadav-Aayansh/gramener-datasets/refs/heads/add-server-logs/server_logs.zip');
             
             if (!response.ok) {
@@ -1666,8 +1246,6 @@ const UI = {
                 </button>
             </div>
         `;
-
-        // Bind events
         const scanBtn = card.querySelector('.scan-btn');
         const viewResultsBtn = card.querySelector('.view-results-btn');
         const viewFunctionBtn = card.querySelector('.view-function-btn');
@@ -1709,8 +1287,6 @@ const UI = {
             const results = await AnalysisService.analyzeWithDetector(attackType.endpoint);
             
             AppState.scanResults[attackType.name] = results;
-            
-            // Update all results
             AppState.allResults = AppState.allResults.filter(r => r.attack_type !== attackType.name);
             AppState.allResults.push(...results);
             
@@ -1805,7 +1381,6 @@ const UI = {
     },
 
     viewAttackFunction(attackType) {
-        // Check if it's a custom analysis
         const customAnalysis = AppState.dynamicAnalyses.find(a => a.name === attackType);
         if (customAnalysis) {
             this.openFunctionModal(
@@ -1815,7 +1390,6 @@ const UI = {
                 true
             );
         } else {
-            // It's a built-in detector
             const builtInFunction = this.getBuiltInDetectorCode(attackType);
             if (builtInFunction) {
                 this.openFunctionModal(
@@ -1835,43 +1409,28 @@ const UI = {
                 description: 'Advanced SQL injection detection using pattern matching for union-based, boolean-based, time-based, and error-based attacks.',
                 code: `function detectSqlInjection(entries) {
   const patterns = [
-    // Union-based injections
     "union\\\\s+(all\\\\s+)?select",
     "select\\\\s+.*\\\\s+from",
     "select\\\\s+\\\\*",
-    
-    // Boolean-based blind injections
     "(and|or)\\\\s+\\\\d+\\\\s*[=<>!]+\\\\s*\\\\d+",
     "(and|or)\\\\s+['\\\\\\\"]?[a-z]+['\\\\\\\"]?\\\\s*[=<>!]+\\\\s*['\\\\\\\"]?[a-z]+['\\\\\\\"]?",
     "(and|or)\\\\s+\\\\d+\\\\s*(and|or)\\\\s+\\\\d+",
-    
-    // Time-based blind injections
     "(sleep|waitfor|delay)\\\\s*\\\\(\\\\s*\\\\d+\\\\s*\\\\)",
     "benchmark\\\\s*\\\\(\\\\s*\\\\d+",
     "pg_sleep\\\\s*\\\\(\\\\s*\\\\d+\\\\s*\\\\)",
-    
-    // Error-based injections
     "(convert|cast|char)\\\\s*\\\\(",
     "concat\\\\s*\\\\(",
     "group_concat\\\\s*\\\\(",
     "having\\\\s+\\\\d+\\\\s*[=<>!]+\\\\s*\\\\d+",
-    
-    // Authentication bypass
     "(admin|user|login)['\\\\\\\"]?\\\\s*(=|like)\\\\s*['\\\\\\\"]?\\\\s*(or|and)",
     "['\\\\\\\"]\\\\s*(or|and)\\\\s*['\\\\\\\"]?[^'\\\\\\\\"]*['\\\\\\\"]?\\\\s*(=|like)",
     "['\\\\\\\"]\\\\s*(or|and)\\\\s*\\\\d+\\\\s*[=<>!]+\\\\s*\\\\d+",
-    
-    // SQL commands and functions
     "(drop|delete|truncate|insert|update)\\\\s+(table|from|into)",
     "(exec|execute|sp_|xp_)\\\\w*",
     "(information_schema|sys\\\\.|mysql\\\\.|pg_)",
     "(load_file|into\\\\s+outfile|dumpfile)",
-    
-    // Comment patterns
     "(--|#|\\\\*/|\\\\*\\\\*)",
     "/\\\\*.*\\\\*/",
-    
-    // Special characters and encodings
     "(%27|%22|%2d%2d|%23)",
     "(0x[0-9a-f]+)",
     "(char\\\\s*\\\\(\\\\s*\\\\d+)",
@@ -1901,11 +1460,7 @@ const UI = {
   const suspicious = entries.filter(entry => {
     const path = entry.path;
     if (!path) return false;
-
-    // Check for path traversal patterns
     const hasTraversalPattern = new RegExp('(\\\\.\\\\./|%2e%2e%2f|%2e%2f|%2f\\\\.\\\\.|/\\\\.{2})', 'i').test(path);
-    
-    // Check for excessive directory depth
     const hasExcessiveDepth = (path.match(/\\//g) || []).length > 15;
     
     return hasTraversalPattern || hasExcessiveDepth;
@@ -2109,14 +1664,8 @@ const UI = {
 
         try {
             const analysis = await AnalysisService.createDynamicAnalysis(description);
-            
-            // Clear the form
             document.getElementById('analysis-description').value = '';
-            
-            // Show custom analysis results section
             document.getElementById('custom-analysis-results').classList.remove('hidden');
-            
-            // Add the custom analysis card
             this.addCustomAnalysisCard(analysis);
             
             Toast.success(`Custom analysis "${analysis.name}" created successfully`);
@@ -2186,8 +1735,6 @@ const UI = {
                 </button>
             </div>
         `;
-
-        // Bind events
         const scanBtn = card.querySelector('.scan-btn');
         const viewResultsBtn = card.querySelector('.view-results-btn');
         const viewFunctionBtn = card.querySelector('.view-function-btn');
@@ -2225,8 +1772,6 @@ const UI = {
             const results = await AnalysisService.runDynamicAnalysis(analysis.id);
             
             AppState.scanResults[analysis.name] = results;
-            
-            // Update all results
             AppState.allResults = AppState.allResults.filter(r => r.attack_type !== analysis.name);
             AppState.allResults.push(...results);
             
@@ -2249,8 +1794,6 @@ const UI = {
         const content = document.getElementById('modal-content');
 
         title.textContent = `${attackType} - Detailed Results`;
-
-        // Ensure modal pagination state
         const st = AppState.modalTableState || { page: 1, perPage: 50 };
         const perPage = Math.max(5, parseInt(st.perPage || 50, 10));
         const total = results.length;
@@ -2285,8 +1828,6 @@ const UI = {
         `;
 
         modal.classList.remove('hidden');
-
-        // Wire up controls
         const rowsSel = document.getElementById('modal-rows-per-page');
         if (rowsSel) {
             rowsSel.addEventListener('change', (e) => {
@@ -2513,16 +2054,9 @@ const UI = {
         const timelineCounts = {};
 
         AppState.allResults.forEach(entry => {
-            // Attack type counts
             attackTypeCounts[entry.attack_type] = (attackTypeCounts[entry.attack_type] || 0) + 1;
-            
-            // IP counts
             ipCounts[entry.ip] = (ipCounts[entry.ip] || 0) + 1;
-            
-            // Status code counts
             statusCounts[entry.status.toString()] = (statusCounts[entry.status.toString()] || 0) + 1;
-            
-            // Timeline data (by date)
             const date = new Date(entry.timestamp).toDateString();
             timelineCounts[date] = (timelineCounts[date] || 0) + 1;
         });
@@ -2659,15 +2193,12 @@ const UI = {
                 </div>
             </div>
         `;
-
-        // Render charts
         setTimeout(() => {
             this.renderCharts(summary);
         }, 100);
     },
 
     renderCharts(summary) {
-        // Attack Types Chart
         const attackTypesCtx = document.getElementById('attack-types-chart');
         if (attackTypesCtx) {
             const attackTypesData = ATTACK_TYPES.map(type => ({
@@ -2719,8 +2250,6 @@ const UI = {
                 }
             });
         }
-
-        // Status Codes Chart
         const statusCodesCtx = document.getElementById('status-codes-chart');
         if (statusCodesCtx) {
             const statusCodesData = Object.entries(summary.statusCodeDistribution).map(([code, count]) => ({
@@ -2756,8 +2285,6 @@ const UI = {
                 }
             });
         }
-
-        // Timeline Chart
         const timelineCtx = document.getElementById('timeline-chart');
         if (timelineCtx && summary.timelineData.length > 0) {
             new Chart(timelineCtx, {
@@ -2809,18 +2336,12 @@ const UI = {
     updateDataTable() {
         const container = document.getElementById('data-table-container');
         const all = AppState.allResults || [];
-        
-        // Build unique lists for facets
         const uniqueMethods = Array.from(new Set(all.map(e => e.method).filter(Boolean))).sort();
         const uniqueAttackTypes = Array.from(new Set(all.map(e => e.attack_type).filter(Boolean))).sort();
-        
-        // Apply facets
         const st = AppState.tableState;
-        // Reset page if dataset changes drastically
         const query = (st.q || '').toLowerCase();
         const hasQuery = query.length > 0;
         let filtered = all.filter(entry => {
-            // Search everywhere
             if (hasQuery) {
                 const hay = [
                     entry.ip, entry.method, entry.path, entry.user_agent,
@@ -2829,16 +2350,13 @@ const UI = {
                 ].filter(Boolean).join(' ').toLowerCase();
                 if (!hay.includes(query)) return false;
             }
-            // Status class filter
             if (st.statusClasses && st.statusClasses.length > 0) {
                 const s = String(entry.status || '').trim();
                 if (!(s.length >= 3 && st.statusClasses.includes(s[0]))) return false;
             }
-            // Method filter
             if (st.methods && st.methods.length > 0) {
                 if (!st.methods.includes(entry.method)) return false;
             }
-            // Attack type filter
             if (st.attackTypes && st.attackTypes.length > 0) {
                 if (!st.attackTypes.includes(entry.attack_type)) return false;
             }
@@ -2929,8 +2447,6 @@ const UI = {
             </section>
           </div>
         `;
-        
-        // Wire up events
         const searchInput = document.getElementById('facet-search');
         if (searchInput) {
             searchInput.addEventListener('input', Utils.debounce((e) => {
@@ -2939,8 +2455,6 @@ const UI = {
                 this.updateDataTable();
             }, 200));
         }
-        
-        // Status checkboxes
         ['2','3','4','5'].forEach(cls => {
             const el = document.getElementById(`facet-status-${cls}`);
             if (el) {
@@ -2953,7 +2467,6 @@ const UI = {
                 });
             }
         });
-        // Method facets
         uniqueMethods.forEach(m => {
             const el = document.getElementById(`facet-method-${m}`);
             if (el) {
@@ -2966,7 +2479,6 @@ const UI = {
                 });
             }
         });
-        // Attack type facets
         uniqueAttackTypes.forEach(a => {
             const safe = a ? a.replace(/[^a-z0-9\-]/gi,'_') : 'unknown';
             const id = `facet-attack-${safe}`;
@@ -3023,8 +2535,6 @@ const UI = {
             }
         }
     },
-
-    // Report Modal Functions
     openReportModal() {
         if (AppState.allResults.length === 0) {
             Toast.error('No analysis data available to generate report');
@@ -3032,18 +2542,12 @@ const UI = {
         }
 
         const modal = document.getElementById('report-modal');
-        
-        // Reset modal state
         document.getElementById('report-generation-interface').classList.remove('hidden');
         document.getElementById('report-display').classList.add('hidden');
-        
-        // Update provider configuration
         this.updateReportProviderConfig(AppState.aiConfig.provider);
         document.getElementById('report-ai-provider-select').value = AppState.aiConfig.provider;
         document.getElementById('report-ai-api-key').value = AppState.aiConfig.apiKey;
         document.getElementById('report-custom-endpoint').value = AppState.aiConfig.customEndpoint;
-        
-        // Update warning
         this.updateReportWarning();
         
         modal.classList.remove('hidden');
@@ -3070,8 +2574,6 @@ const UI = {
                 apiKeyLink.href = provider.apiKeyLink;
             }
         }
-        
-        // Update AI config
         AppState.aiConfig.provider = providerId;
         this.updateReportWarning();
     },
@@ -3134,30 +2636,20 @@ const UI = {
     },
 
     displayReport(markdown) {
-        // Hide generation interface and show report display
         document.getElementById('report-generation-interface').classList.add('hidden');
         document.getElementById('report-display').classList.remove('hidden');
-        
-        // Set markdown content
         document.getElementById('report-markdown-content').textContent = markdown;
-        
-        // Render preview
         const previewDiv = document.getElementById('report-preview');
         previewDiv.innerHTML = marked.parse(markdown);
         previewDiv.className = 'report-content prose prose-lg max-w-none dark:prose-invert overflow-y-auto h-full p-6';
-        
-        // Show preview tab by default
         this.switchReportTab('preview');
     },
 
     switchReportTab(tab) {
-        // Update tab buttons
         document.querySelectorAll('.report-tab').forEach(btn => {
             btn.classList.remove('active');
         });
         document.getElementById(`report-tab-${tab}`).classList.add('active');
-        
-        // Update content
         if (tab === 'preview') {
             document.getElementById('report-preview').classList.remove('hidden');
             document.getElementById('report-markdown').classList.add('hidden');
@@ -3234,15 +2726,10 @@ const UI = {
         }
     }
 };
-
-// Application Initialization
 document.addEventListener('DOMContentLoaded', () => {
-    // Initialize all components
     Toast.init();
     ThemeManager.init();
     UI.init();
-    
-    // Update AI provider configuration on change
     document.getElementById('report-ai-provider-select').addEventListener('change', (e) => {
         UI.updateReportProviderConfig(e.target.value);
     });
@@ -3258,14 +2745,10 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('🛡️ Cyber Detect - Advanced Security Log Analysis Platform');
     console.log('Application initialized successfully');
 });
-
-// Global error handler
 window.addEventListener('error', (event) => {
     console.error('Global error:', event.error);
     Toast.error('An unexpected error occurred. Please check the console for details.');
 });
-
-// Global unhandled promise rejection handler
 window.addEventListener('unhandledrejection', (event) => {
     console.error('Unhandled promise rejection:', event.reason);
     Toast.error('An unexpected error occurred. Please check the console for details.');
