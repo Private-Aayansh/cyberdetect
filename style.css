@@ -850,3 +850,37 @@ body {
     white-space: nowrap;
     border: 0;
 }
+
+/* ----- Modal Scrolling Fix (2025-08-14) ----- */
+/* Make any element with .modal class scroll within viewport */
+.modal {
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+}
+
+/* When a fixed full-screen overlay is used, ensure it can scroll */
+.modal-overlay,
+#details-modal,
+#function-modal,
+#report-modal {
+    overflow-y: auto !important;
+}
+
+/* Smooth scrolling inside modal panels */
+.modal-panel {
+    max-height: calc(100vh - 4rem);
+    overflow-y: auto;
+}
+
+
+/* ----- Modal Layout Fix (2025-08-14) ----- */
+#details-modal > div,
+#function-modal > div,
+#report-modal > div,
+#table-modal > div {
+    width: 100%;
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    border-radius: 0.75rem;
+}

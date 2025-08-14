@@ -14,10 +14,22 @@ const AppState = {
         attackType: '',
         statusCode: '',
         ip: '',
-        dateRange: '',
-        severity: '',
-        search: '',
-        method: ''
+        method: '',
+        path: '',
+        search: ''
+    },
+    // Pagination + Facets state for Data Table and modals
+    tableState: {
+        page: 1,
+        perPage: 50,
+        q: '',
+        statusClasses: [],   // e.g., ['2', '4', '5'] meaning 2xx, 4xx, 5xx
+        methods: [],         // e.g., ['GET','POST']
+        attackTypes: []      // e.g., ['SQL Injection','Bot Detection']
+    },
+    modalTableState: {
+        page: 1,
+        perPage: 50
     },
     aiConfig: {
         provider: 'gemini',
@@ -2237,9 +2249,75 @@ const UI = {
         const content = document.getElementById('modal-content');
 
         title.textContent = `${attackType} - Detailed Results`;
-        content.innerHTML = this.generateDataTable(results);
+
+        // Ensure modal pagination state
+        const st = AppState.modalTableState || { page: 1, perPage: 50 };
+        const perPage = Math.max(5, parseInt(st.perPage || 50, 10));
+        const total = results.length;
+        const totalPages = Math.max(1, Math.ceil(total / perPage));
+        if (st.page > totalPages) st.page = totalPages;
+        if (st.page < 1) st.page = 1;
+        const startIdx = (st.page - 1) * perPage;
+        const endIdx = Math.min(total, startIdx + perPage);
+        const pageSlice = results.slice(startIdx, endIdx);
+        
+        content.innerHTML = `
+          <div class="space-y-3">
+            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+              ${this.generateDataTable(pageSlice, {})}
+            </div>
+            <div class="flex items-center justify-between bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-3">
+              <div class="text-sm text-gray-600 dark:text-gray-300">Showing <span class="font-medium">${startIdx + 1}</span>–<span class="font-medium">${endIdx}</span> of <span class="font-medium">${total}</span></div>
+              <div class="flex items-center space-x-4">
+                <label class="text-sm text-gray-600 dark:text-gray-300">Rows per page:
+                  <select id="modal-rows-per-page" class="ml-2 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-white">
+                    ${[10,25,50,100,200].map(n => `<option value="${n}" ${n==perPage?'selected':''}>${n}</option>`).join('')}
+                  </select>
+                </label>
+                <div class="flex items-center space-x-1" id="modal-pagination-controls">
+                  <button data-page="prev" class="px-3 py-1 rounded-md border border-gray-300 dark:border-gray-600 disabled:opacity-50">Prev</button>
+                  <span class="text-sm text-gray-600 dark:text-gray-300">Page ${st.page} / ${totalPages}</span>
+                  <button data-page="next" class="px-3 py-1 rounded-md border border-gray-300 dark:border-gray-600 disabled:opacity-50">Next</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
 
         modal.classList.remove('hidden');
+
+        // Wire up controls
+        const rowsSel = document.getElementById('modal-rows-per-page');
+        if (rowsSel) {
+            rowsSel.addEventListener('change', (e) => {
+                AppState.modalTableState.perPage = parseInt(e.target.value, 10);
+                AppState.modalTableState.page = 1;
+                this.openDetailsModal(attackType, results);
+            });
+        }
+        const pager = document.getElementById('modal-pagination-controls');
+        if (pager) {
+            const prev = pager.querySelector('[data-page="prev"]');
+            const next = pager.querySelector('[data-page="next"]');
+            if (prev) {
+                prev.disabled = (st.page <= 1);
+                prev.addEventListener('click', () => {
+                    if (AppState.modalTableState.page > 1) {
+                        AppState.modalTableState.page -= 1;
+                        this.openDetailsModal(attackType, results);
+                    }
+                });
+            }
+            if (next) {
+                next.disabled = (st.page >= totalPages);
+                next.addEventListener('click', () => {
+                    if (AppState.modalTableState.page < totalPages) {
+                        AppState.modalTableState.page += 1;
+                        this.openDetailsModal(attackType, results);
+                    }
+                });
+            }
+        }
     },
 
     openFunctionModal(title, code, description, isCustom) {
@@ -2360,7 +2438,7 @@ const UI = {
         return JSON.stringify(data, null, 2);
     },
 
-    generateDataTable(data) {
+    generateDataTable(data, options = {}) {
         if (!data || data.length === 0) {
             return '<p class="text-center text-gray-500 dark:text-gray-400 py-8">No data available</p>';
         }
@@ -2730,34 +2808,220 @@ const UI = {
 
     updateDataTable() {
         const container = document.getElementById('data-table-container');
+        const all = AppState.allResults || [];
         
-        if (AppState.allResults.length === 0) {
-            container.innerHTML = `
-                <div class="bg-white dark:bg-gray-800 rounded-xl p-8 text-center">
-                    <i class="fas fa-database text-4xl text-gray-400 mb-4"></i>
-                    <p class="text-gray-600 dark:text-gray-300">No data available. Please run some scans first.</p>
-                </div>
-            `;
-            return;
-        }
-
+        // Build unique lists for facets
+        const uniqueMethods = Array.from(new Set(all.map(e => e.method).filter(Boolean))).sort();
+        const uniqueAttackTypes = Array.from(new Set(all.map(e => e.attack_type).filter(Boolean))).sort();
+        
+        // Apply facets
+        const st = AppState.tableState;
+        // Reset page if dataset changes drastically
+        const query = (st.q || '').toLowerCase();
+        const hasQuery = query.length > 0;
+        let filtered = all.filter(entry => {
+            // Search everywhere
+            if (hasQuery) {
+                const hay = [
+                    entry.ip, entry.method, entry.path, entry.user_agent,
+                    entry.referrer, entry.suspicion_reason, entry.attack_type,
+                    String(entry.status), String(entry.timestamp)
+                ].filter(Boolean).join(' ').toLowerCase();
+                if (!hay.includes(query)) return false;
+            }
+            // Status class filter
+            if (st.statusClasses && st.statusClasses.length > 0) {
+                const s = String(entry.status || '').trim();
+                if (!(s.length >= 3 && st.statusClasses.includes(s[0]))) return false;
+            }
+            // Method filter
+            if (st.methods && st.methods.length > 0) {
+                if (!st.methods.includes(entry.method)) return false;
+            }
+            // Attack type filter
+            if (st.attackTypes && st.attackTypes.length > 0) {
+                if (!st.attackTypes.includes(entry.attack_type)) return false;
+            }
+            return true;
+        });
+        
+        const total = filtered.length;
+        const perPage = Math.max(5, parseInt(st.perPage || 50, 10));
+        const totalPages = Math.max(1, Math.ceil(total / perPage));
+        if (st.page > totalPages) st.page = totalPages;
+        if (st.page < 1) st.page = 1;
+        const startIdx = (st.page - 1) * perPage;
+        const endIdx = startIdx + perPage;
+        const pageSlice = filtered.slice(startIdx, endIdx);
+        
+        const facetCheckbox = (id, label, checked) => {
+            return `<label class="flex items-center space-x-2 cursor-pointer">
+                <input id="${id}" type="checkbox" class="facet-checkbox" ${checked ? 'checked' : ''}>
+                <span class="text-sm text-gray-700 dark:text-gray-300">${label}</span>
+            </label>`;
+        };
+        
+        const statusFacetHtml = ['2','3','4','5'].map(cls => {
+            const id = `facet-status-${cls}`;
+            return facetCheckbox(id, `${cls}xx`, (st.statusClasses||[]).includes(cls));
+        }).join('');
+        
+        const methodFacetHtml = uniqueMethods.map(m => {
+            const id = `facet-method-${m}`;
+            return facetCheckbox(id, m, (st.methods||[]).includes(m));
+        }).join('');
+        
+        const attackFacetHtml = uniqueAttackTypes.map(a => {
+            const safe = a ? a.replace(/[^a-z0-9\-]/gi,'_') : 'unknown';
+            const id = `facet-attack-${safe}`;
+            return facetCheckbox(id, a || 'Unknown', (st.attackTypes||[]).includes(a));
+        }).join('');
+        
         container.innerHTML = `
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden">
-                <div class="p-4 border-b border-gray-200 dark:border-gray-700">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-                                Security Threats (${AppState.allResults.length.toLocaleString()})
-                            </h3>
-                            <p class="text-sm text-gray-600 dark:text-gray-300">
-                                All detected security threats from log analysis
-                            </p>
-                        </div>
-                    </div>
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <!-- Facets -->
+            <aside class="lg:col-span-3 bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+              <div class="mb-4">
+                <div class="relative">
+                  <input id="facet-search" type="text" value="${Utils.escapeHtml(st.q || '')}" placeholder="Search everywhere..." class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 px-3 py-2">
+                  <i class="fas fa-search absolute right-3 top-2.5 text-gray-400"></i>
                 </div>
-                ${this.generateDataTable(AppState.allResults)}
-            </div>
+              </div>
+              <div class="space-y-4">
+                <div>
+                  <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-2">Status</h4>
+                  <div class="space-y-2" id="facet-status">${statusFacetHtml || '<p class="text-xs text-gray-400">No status data</p>'}</div>
+                </div>
+                <div>
+                  <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-2">HTTP Method</h4>
+                  <div class="space-y-2 max-h-40 overflow-auto pr-1" id="facet-methods">${methodFacetHtml || '<p class="text-xs text-gray-400">No method data</p>'}</div>
+                </div>
+                <div>
+                  <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-2">Attack Type</h4>
+                  <div class="space-y-2 max-h-48 overflow-auto pr-1" id="facet-attacks">${attackFacetHtml || '<p class="text-xs text-gray-400">No attack types yet</p>'}</div>
+                </div>
+                <div class="pt-2 flex items-center justify-between">
+                  <button id="facet-clear" class="text-xs px-3 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600">Clear</button>
+                  <div class="text-xs text-gray-500 dark:text-gray-400">${total} matches</div>
+                </div>
+              </div>
+            </aside>
+            <!-- Table -->
+            <section class="lg:col-span-9 space-y-2">
+              <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                ${this.generateDataTable(pageSlice, { })}
+              </div>
+              <div class="flex items-center justify-between bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-3">
+                <div class="text-sm text-gray-600 dark:text-gray-300">Showing <span class="font-medium">${startIdx + 1}</span>–<span class="font-medium">${Math.min(endIdx, total)}</span> of <span class="font-medium">${total}</span></div>
+                <div class="flex items-center space-x-4">
+                  <label class="text-sm text-gray-600 dark:text-gray-300">Rows per page:
+                    <select id="rows-per-page" class="ml-2 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-900 dark:text-white">
+                      ${[10,25,50,100,200].map(n => `<option value="${n}" ${n==perPage?'selected':''}>${n}</option>`).join('')}
+                    </select>
+                  </label>
+                  <div class="flex items-center space-x-1" id="pagination-controls">
+                    <button data-page="prev" class="px-3 py-1 rounded-md border border-gray-300 dark:border-gray-600 disabled:opacity-50">Prev</button>
+                    <span class="text-sm text-gray-600 dark:text-gray-300">Page ${st.page} / ${totalPages}</span>
+                    <button data-page="next" class="px-3 py-1 rounded-md border border-gray-300 dark:border-gray-600 disabled:opacity-50">Next</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
         `;
+        
+        // Wire up events
+        const searchInput = document.getElementById('facet-search');
+        if (searchInput) {
+            searchInput.addEventListener('input', Utils.debounce((e) => {
+                AppState.tableState.q = e.target.value;
+                AppState.tableState.page = 1;
+                this.updateDataTable();
+            }, 200));
+        }
+        
+        // Status checkboxes
+        ['2','3','4','5'].forEach(cls => {
+            const el = document.getElementById(`facet-status-${cls}`);
+            if (el) {
+                el.addEventListener('change', (e) => {
+                    const arr = new Set(AppState.tableState.statusClasses || []);
+                    if (e.target.checked) arr.add(cls); else arr.delete(cls);
+                    AppState.tableState.statusClasses = Array.from(arr);
+                    AppState.tableState.page = 1;
+                    this.updateDataTable();
+                });
+            }
+        });
+        // Method facets
+        uniqueMethods.forEach(m => {
+            const el = document.getElementById(`facet-method-${m}`);
+            if (el) {
+                el.addEventListener('change', (e) => {
+                    const arr = new Set(AppState.tableState.methods || []);
+                    if (e.target.checked) arr.add(m); else arr.delete(m);
+                    AppState.tableState.methods = Array.from(arr);
+                    AppState.tableState.page = 1;
+                    this.updateDataTable();
+                });
+            }
+        });
+        // Attack type facets
+        uniqueAttackTypes.forEach(a => {
+            const safe = a ? a.replace(/[^a-z0-9\-]/gi,'_') : 'unknown';
+            const id = `facet-attack-${safe}`;
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('change', (e) => {
+                    const arr = new Set(AppState.tableState.attackTypes || []);
+                    if (e.target.checked) arr.add(a); else arr.delete(a);
+                    AppState.tableState.attackTypes = Array.from(arr);
+                    AppState.tableState.page = 1;
+                    this.updateDataTable();
+                });
+            }
+        });
+        
+        const clearBtn = document.getElementById('facet-clear');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                AppState.tableState = { page: 1, perPage: perPage, q: '', statusClasses: [], methods: [], attackTypes: [] };
+                this.updateDataTable();
+            });
+        }
+        
+        const rowsSel = document.getElementById('rows-per-page');
+        if (rowsSel) {
+            rowsSel.addEventListener('change', (e) => {
+                AppState.tableState.perPage = parseInt(e.target.value, 10);
+                AppState.tableState.page = 1;
+                this.updateDataTable();
+            });
+        }
+        
+        const pager = document.getElementById('pagination-controls');
+        if (pager) {
+            const prev = pager.querySelector('[data-page="prev"]');
+            const next = pager.querySelector('[data-page="next"]');
+            if (prev) {
+                prev.disabled = (st.page <= 1);
+                prev.addEventListener('click', () => {
+                    if (AppState.tableState.page > 1) {
+                        AppState.tableState.page -= 1;
+                        this.updateDataTable();
+                    }
+                });
+            }
+            if (next) {
+                next.disabled = (st.page >= totalPages);
+                next.addEventListener('click', () => {
+                    if (AppState.tableState.page < totalPages) {
+                        AppState.tableState.page += 1;
+                        this.updateDataTable();
+                    }
+                });
+            }
+        }
     },
 
     // Report Modal Functions
