@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyber Detect - Vue.js 3 Version</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config = { darkMode: 'class' };</script>
+    <script>
+        // Apply stored theme ASAP (prevents flicker)
+        (function() {
+            try {
+                var theme = localStorage.getItem('cyberdetect-vue-theme');
+                if (!theme) {
+                    // fall back to OS preference
+                    theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                }
+                if (theme === 'dark') {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
+            } catch (e) {}
+        })();
+    </script>
+    <!-- External CSS Dependencies -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet"/>
+    <!-- Custom Styles -->
+    <link href="style.css" rel="stylesheet"/>
+</head>
+<body class="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
+    <div id="app">
+        <!-- Toast Container -->
+        <div class="fixed bottom-4 right-4 space-y-2 z-50">
+            <div v-for="toast in toasts" :key="toast.id" 
+                 :class="['toast', toast.type, 'px-6 py-4 rounded-lg shadow-lg text-white font-medium animate-slide-in']">
+                <div class="flex items-center space-x-3">
+                    <i :class="getToastIcon(toast.type)"></i>
+                    <span>{{ toast.message }}</span>
+                    <button @click="removeToast(toast.id)" class="ml-2 text-white/80 hover:text-white">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Header -->
+        <header class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex items-center justify-between h-16">
+                    <div class="flex items-center space-x-3">
+                        <div class="p-2 bg-blue-100 dark:bg-blue-900/20 rounded-lg">
+                            <i class="fas fa-shield-alt text-blue-600 dark:text-blue-400 text-2xl"></i>
+                        </div>
+                        <div>
+                            <h1 class="text-xl font-bold text-gray-900 dark:text-white">
+                                Cyber Detect (Vue.js)
+                            </h1>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">
+                                Advanced Security Log Analysis
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <!-- Export Buttons -->
+                        <div v-show="hasAnalysisResults" class="flex items-center space-x-2">
+                            <button @click="generateReport" 
+                                    class="flex items-center space-x-1 px-3 py-1 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors">
+                                <i class="fas fa-chart-bar"></i>
+                                <span>Report</span>
+                            </button>
+                            <button @click="exportCSV" 
+                                    class="flex items-center space-x-1 px-3 py-1 text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors">
+                                <i class="fas fa-download"></i>
+                                <span>CSV</span>
+                            </button>
+                            <button @click="exportJSON" 
+                                    class="flex items-center space-x-1 px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
+                                <i class="fas fa-download"></i>
+                                <span>JSON</span>
+                            </button>
+                        </div>
+                        <!-- Theme Toggle -->
+                        <button @click="toggleTheme" 
+                                class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                            <i class="fas fa-moon dark:hidden"></i>
+                            <i class="fas fa-sun hidden dark:inline"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Navigation -->
+        <nav class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex space-x-8">
+                    <button v-for="tab in tabs" :key="tab.id"
+                            @click="activeView = tab.id"
+                            :class="['nav-tab flex items-center space-x-2 px-3 py-4 text-sm font-medium border-b-2 transition-colors', 
+                                   activeView === tab.id ? 'active' : '']">
+                        <i :class="tab.icon"></i>
+                        <span>{{ tab.name }}</span>
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Overview View -->
+            <div v-show="activeView === 'overview'" class="space-y-8">
+                <!-- File Upload Section -->
+                <div class="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
+                    <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                        Upload Log File or Try Demo
+                    </h2>
+                    
+                    <!-- Demo Dataset Card -->
+                    <div class="bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl p-6 border-2 border-dashed border-blue-300 dark:border-blue-600 hover:border-blue-400 dark:hover:border-blue-500 transition-all duration-200 mb-6">
+                        <div class="flex items-start justify-between mb-4">
+                            <div class="flex items-center space-x-3">
+                                <div class="p-2 bg-blue-500 rounded-lg">
+                                    <i class="fas fa-database text-white text-xl"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                                        Demo Dataset
+                                    </h3>
+                                    <p class="text-sm text-blue-600 dark:text-blue-400 font-medium">
+                                        Synthetic Apache Server Logs
+                                    </p>
+                                </div>
+                            </div>
+                            <a href="https://raw.githubusercontent.com/Yadav-Aayansh/gramener-datasets/add-server-logs/server_logs.zip" 
+                               target="_blank" rel="noopener noreferrer"
+                               class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-white/50 dark:hover:bg-gray-700/50 transition-colors">
+                                <i class="fas fa-external-link-alt"></i>
+                            </a>
+                        </div>
+                        <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                            Test the application with pre-generated Apache server logs containing various security threats and attack patterns. 
+                            Perfect for exploring all detection capabilities without needing your own log files.
+                        </p>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
+                                <div class="flex items-center space-x-1">
+                                    <i class="fas fa-download"></i>
+                                    <span>ZIP Format</span>
+                                </div>
+                                <div class="flex items-center space-x-1">
+                                    <i class="fas fa-check-circle"></i>
+                                    <span>Ready to Use</span>
+                                </div>
+                            </div>
+                            <button @click="loadDemo" :disabled="isLoading"
+                                    class="flex items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors">
+                                <i class="fas fa-play"></i>
+                                <span>Load Demo</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Divider -->
+                    <div class="relative my-6">
+                        <div class="absolute inset-0 flex items-center">
+                            <div class="w-full border-t border-gray-300 dark:border-gray-600"></div>
+                        </div>
+                        <div class="relative flex justify-center text-sm">
+                            <span class="px-2 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                                Or upload your own file
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- File Upload -->
+                    <div @drop="handleDrop" @dragover.prevent @dragenter.prevent
+                         :class="['relative border-2 border-dashed rounded-xl p-8 text-center transition-all duration-200 cursor-pointer',
+                                isDragging ? 'file-upload-drag' : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500']"
+                         @click="$refs.fileInput.click()">
+                        <input ref="fileInput" @change="handleFileSelect" 
+                               type="file" accept=".log,.txt,.zip,.gz" 
+                               class="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>
+                        <div class="flex flex-col items-center space-y-4">
+                            <i class="fas fa-upload text-4xl text-gray-400"></i>
+                            <div>
+                                <p class="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                                    Upload Log File
+                                </p>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">
+                                    Drag and drop your log file here, or click to select
+                                </p>
+                                <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                                    Supported formats: .log, .txt, .zip, .gz • Max size: 100MB
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-show="selectedFile" class="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                        <p class="text-sm text-blue-800 dark:text-blue-200">
+                            <i class="fas fa-file-alt mr-2"></i>
+                            {{ selectedFile?.name }} ({{ formatFileSize(selectedFile?.size) }})
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Attack Type Cards -->
+                <div v-show="showAttackTypes" class="space-y-6">
+                    <div class="flex items-center justify-between">
+                        <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
+                            Security Threat Analysis
+                        </h2>
+                        <div class="flex items-center space-x-3">
+                            <button @click="runAllScans" :disabled="isAnalyzing"
+                                    class="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
+                                <i class="fas fa-shield-alt"></i>
+                                <span>{{ isAnalyzing ? 'Analyzing...' : 'Run All Scans' }}</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        <div v-for="attackType in attackTypes" :key="attackType.endpoint"
+                             class="attack-card bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-700 cursor-pointer"
+                             @click="runSingleScan(attackType)">
+                            <div class="flex items-center justify-between mb-4">
+                                <div class="flex items-center space-x-3">
+                                    <div :style="{backgroundColor: attackType.color + '20'}" class="p-2 rounded-lg">
+                                        <i class="fas fa-shield-alt text-xl" :style="{color: attackType.color}"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                                            {{ attackType.name }}
+                                        </h3>
+                                        <span :class="['text-xs px-2 py-1 rounded-full font-medium', getSeverityClass(attackType.severity)]">
+                                            {{ attackType.severity.toUpperCase() }}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div v-if="analysisResults[attackType.endpoint]" class="text-right">
+                                    <div class="text-2xl font-bold text-gray-900 dark:text-white">
+                                        {{ analysisResults[attackType.endpoint].count || 0 }}
+                                    </div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                                        threats found
+                                    </div>
+                                </div>
+                                <div v-else-if="isAnalyzing" class="spinner"></div>
+                            </div>
+                            <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                                {{ attackType.description }}
+                            </p>
+                            <div class="flex items-center justify-between">
+                                <button class="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium">
+                                    View Details
+                                </button>
+                                <i class="fas fa-arrow-right text-gray-400"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Custom Analysis Section -->
+                    <div class="mt-8">
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                            Custom Analysis
+                        </h3>
+                        <div class="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
+                            <div class="flex items-center justify-between mb-6">
+                                <div class="flex items-center space-x-3">
+                                    <div class="p-2 bg-purple-100 dark:bg-purple-900/20 rounded-lg">
+                                        <i class="fas fa-magic text-purple-600 dark:text-purple-400 text-xl"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                                            AI-Powered Custom Analysis
+                                        </h3>
+                                        <p class="text-sm text-gray-600 dark:text-gray-300">
+                                            Describe what you want to analyze and AI will create the detection logic
+                                        </p>
+                                    </div>
+                                </div>
+                                <button @click="showAiConfig = !showAiConfig"
+                                        class="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                                    <i class="fas fa-cog"></i>
+                                </button>
+                            </div>
+
+                            <!-- AI Configuration Panel -->
+                            <div v-show="showAiConfig" class="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                                <h4 class="text-sm font-medium text-gray-900 dark:text-white mb-3">AI Provider Configuration</h4>
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">AI Provider</label>
+                                        <select v-model="aiConfig.provider" @change="updateApiKeyLink"
+                                                class="w-full px-4 py-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-900 dark:text-white">
+                                            <option v-for="provider in llmProviders" :key="provider.id" :value="provider.id">
+                                                {{ provider.name }}
+                                            </option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <div class="flex items-center justify-between mb-2">
+                                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">API Key</label>
+                                            <a :href="currentProvider?.apiKeyLink" target="_blank" rel="noopener noreferrer"
+                                               class="text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 flex items-center space-x-1">
+                                                <span>Get API Key</span>
+                                                <i class="fas fa-external-link-alt text-xs"></i>
+                                            </a>
+                                        </div>
+                                        <input v-model="aiConfig.apiKey" type="password" placeholder="Enter your API key..."
+                                               class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"/>
+                                    </div>
+                                    <div v-show="currentProvider?.customEndpoint">
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">API Endpoint</label>
+                                        <input v-model="aiConfig.customEndpoint" type="url" 
+                                               :placeholder="currentProvider?.defaultEndpoint || 'https://api.example.com/v1/chat/completions'"
+                                               class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"/>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Analysis Input Form -->
+                            <form @submit.prevent="createCustomAnalysis" class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        Describe the analysis you want to perform
+                                    </label>
+                                    <textarea v-model="customAnalysisDescription" rows="3"
+                                              placeholder="e.g., Look for password or secret extraction attacks, Find attempts to access sensitive configuration files..."
+                                              class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none"></textarea>
+                                </div>
+                                <button type="submit" :disabled="!customAnalysisDescription.trim() || isCreatingAnalysis"
+                                        class="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors">
+                                    <i class="fas fa-plus"></i>
+                                    <span>{{ isCreatingAnalysis ? 'Creating...' : 'Create Custom Analysis' }}</span>
+                                </button>
+                            </form>
+
+                            <!-- Example Prompts -->
+                            <div class="mt-6">
+                                <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Example Analysis Ideas:</h4>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                    <button v-for="prompt in examplePrompts" :key="prompt"
+                                            @click="customAnalysisDescription = prompt"
+                                            class="text-left p-3 text-sm bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-lg transition-colors">
+                                        <div class="flex items-start space-x-2">
+                                            <i class="fas fa-sparkles text-purple-500 mt-0.5 flex-shrink-0"></i>
+                                            <span class="text-gray-700 dark:text-gray-300">{{ prompt }}</span>
+                                        </div>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div v-show="!aiConfig.apiKey" class="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                                <div class="flex items-center space-x-2">
+                                    <i class="fas fa-brain text-yellow-600 dark:text-yellow-400"></i>
+                                    <p class="text-sm text-yellow-800 dark:text-yellow-200">
+                                        Please configure your AI provider settings to create custom analyses
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Custom Analysis Results -->
+                    <div v-show="customAnalysisResults.length > 0" class="mt-8">
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                            Custom Analysis Results
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                            <div v-for="result in customAnalysisResults" :key="result.id"
+                                 class="attack-card bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-700 cursor-pointer"
+                                 @click="viewCustomAnalysisDetails(result)">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="p-2 bg-purple-100 dark:bg-purple-900/20 rounded-lg">
+                                            <i class="fas fa-magic text-purple-600 dark:text-purple-400 text-xl"></i>
+                                        </div>
+                                        <div>
+                                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                                                {{ result.name }}
+                                            </h3>
+                                            <span class="text-xs px-2 py-1 rounded-full font-medium bg-purple-100 dark:bg-purple-900/20 text-purple-800 dark:text-purple-200">
+                                                CUSTOM
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="text-2xl font-bold text-gray-900 dark:text-white">
+                                            {{ result.count || 0 }}
+                                        </div>
+                                        <div class="text-xs text-gray-500 dark:text-gray-400">
+                                            matches found
+                                        </div>
+                                    </div>
+                                </div>
+                                <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                                    {{ result.description }}
+                                </p>
+                                <div class="flex items-center justify-between">
+                                    <button class="text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 font-medium">
+                                        View Details
+                                    </button>
+                                    <i class="fas fa-arrow-right text-gray-400"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard View -->
+            <div v-show="activeView === 'dashboard'" class="space-y-6">
+                <div v-if="!hasAnalysisResults" class="text-center py-12">
+                    <div class="p-4 bg-gray-100 dark:bg-gray-700 rounded-full w-20 h-20 mx-auto mb-6 flex items-center justify-center">
+                        <i class="fas fa-chart-bar text-gray-400 text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                        No Analysis Data Available
+                    </h3>
+                    <p class="text-gray-600 dark:text-gray-300 mb-8">
+                        Upload a log file and run security scans to view dashboard analytics.
+                    </p>
+                    <button @click="activeView = 'overview'"
+                            class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
+                        Go to Overview
+                    </button>
+                </div>
+
+                <div v-else>
+                    <!-- Dashboard Stats -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div class="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Total Threats</p>
+                                    <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ totalThreats }}</p>
+                                </div>
+                                <div class="p-3 bg-red-100 dark:bg-red-900/20 rounded-lg">
+                                    <i class="fas fa-exclamation-triangle text-red-600 dark:text-red-400 text-xl"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">High Severity</p>
+                                    <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ highSeverityThreats }}</p>
+                                </div>
+                                <div class="p-3 bg-red-100 dark:bg-red-900/20 rounded-lg">
+                                    <i class="fas fa-shield-alt text-red-600 dark:text-red-400 text-xl"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Attack Types</p>
+                                    <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ activeAttackTypes }}</p>
+                                </div>
+                                <div class="p-3 bg-yellow-100 dark:bg-yellow-900/20 rounded-lg">
+                                    <i class="fas fa-bug text-yellow-600 dark:text-yellow-400 text-xl"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Log Entries</p>
+                                    <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ totalLogEntries }}</p>
+                                </div>
+                                <div class="p-3 bg-blue-100 dark:bg-blue-900/20 rounded-lg">
+                                    <i class="fas fa-file-alt text-blue-600 dark:text-blue-400 text-xl"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Charts placeholder -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                                Threat Distribution
+                            </h3>
+                            <div class="h-64 flex items-center justify-center text-gray-500 dark:text-gray-400">
+                                <div class="text-center">
+                                    <i class="fas fa-chart-pie text-4xl mb-4"></i>
+                                    <p>Chart visualization would go here</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg">
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                                Timeline Analysis
+                            </h3>
+                            <div class="h-64 flex items-center justify-center text-gray-500 dark:text-gray-400">
+                                <div class="text-center">
+                                    <i class="fas fa-chart-line text-4xl mb-4"></i>
+                                    <p>Timeline chart would go here</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Data Table View -->
+            <div v-show="activeView === 'data'" class="space-y-6">
+                <div v-if="!hasAnalysisResults" class="text-center py-12">
+                    <div class="p-4 bg-gray-100 dark:bg-gray-700 rounded-full w-20 h-20 mx-auto mb-6 flex items-center justify-center">
+                        <i class="fas fa-database text-gray-400 text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                        No Data Available
+                    </h3>
+                    <p class="text-gray-600 dark:text-gray-300 mb-8">
+                        Upload a log file and run security scans to view detailed data.
+                    </p>
+                    <button @click="activeView = 'overview'"
+                            class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
+                        Go to Overview
+                    </button>
+                </div>
+
+                <div v-else class="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden">
+                    <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                            Security Analysis Data
+                        </h3>
+                        <p class="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                            Detailed view of all detected security threats and log entries
+                        </p>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                            <thead class="bg-gray-50 dark:bg-gray-700">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Attack Type
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Severity
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Count
+                                    </th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                                        Description
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                <tr v-for="attackType in attackTypes" :key="attackType.endpoint"
+                                    v-show="analysisResults[attackType.endpoint]?.count > 0"
+                                    class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="flex items-center">
+                                            <div :style="{backgroundColor: attackType.color + '20'}" class="p-2 rounded-lg mr-3">
+                                                <i class="fas fa-shield-alt" :style="{color: attackType.color}"></i>
+                                            </div>
+                                            <div class="text-sm font-medium text-gray-900 dark:text-white">
+                                                {{ attackType.name }}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span :class="['text-xs px-2 py-1 rounded-full font-medium', getSeverityClass(attackType.severity)]">
+                                            {{ attackType.severity.toUpperCase() }}
+                                        </span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                        {{ analysisResults[attackType.endpoint]?.count || 0 }}
+                                    </td>
+                                    <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-300">
+                                        {{ attackType.description }}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Details Modal -->
+        <div v-show="showDetailsModal" 
+             class="fixed inset-0 bg-black/50 flex justify-center z-50 p-4 overflow-y-auto sm:items-center items-start"
+             @click.self="closeDetailsModal">
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-y-auto animate-scale-in">
+                <div class="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                    <h2 class="text-xl font-semibold text-gray-900 dark:text-white">
+                        {{ modalTitle }}
+                    </h2>
+                    <button @click="closeDetailsModal"
+                            class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="p-6" v-html="modalContent">
+                    <!-- Modal content will be dynamically generated -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- External JavaScript Dependencies -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="vue.js"></script>
+</body>
+</html>
