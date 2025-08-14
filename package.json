@@ -1,0 +1,20 @@
+{
+  "name": "cyber-detect",
+  "version": "1.0.0",
+  "description": "Advanced Security Log Analysis Tool",
+  "main": "index.html",
+  "scripts": {
+    "start": "http-server . -p 3000 -o",
+    "dev": "http-server . -p 3000 -o"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  },
+  "keywords": [
+    "security",
+    "log-analysis",
+    "cybersecurity"
+  ],
+  "author": "",
+  "license": "MIT"
+}
